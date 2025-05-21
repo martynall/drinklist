@@ -6,6 +6,8 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.runtime.saveable.Saver
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -28,7 +30,12 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.example.drinklist.model.SplashScreen
+import kotlinx.coroutines.delay
 
 
 class MainActivity : ComponentActivity() {
@@ -36,7 +43,12 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             DrinkListTheme {
-                var showSplash by remember { mutableStateOf(true) }
+                var showSplash by rememberSaveable { mutableStateOf(true) }
+
+                LaunchedEffect(Unit) {
+                    delay(2000) // np. czas trwania animacji
+                    showSplash = false
+                }
 
                 if (showSplash) {
                     SplashScreen(navigateToMain = { showSplash = false })
@@ -52,7 +64,7 @@ class MainActivity : ComponentActivity() {
 
                     if (isTabletLayout) {
                         Row(Modifier.fillMaxSize()) {
-                            Box(Modifier.weight(1f)) {
+                            Box(Modifier.weight(0.5f)) {
                                 DrinkListScreen(
                                     drinkViewModel = drinkViewModel,
                                     onDrinkSelected = { selectedDrinkId.value = it }
@@ -94,7 +106,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
-
 @Composable
 fun DrinkListScreen(
     drinkViewModel: DrinkViewModel,
@@ -104,9 +115,27 @@ fun DrinkListScreen(
     val loading by drinkViewModel.loading.collectAsState()
 
     LaunchedEffect(Unit) {
-        if (drinks.isEmpty()) { // Załaduj tylko jeśli lista jest pusta
-            drinkViewModel.fetchDrinks()
+        drinkViewModel.fetchDrinksIfNeeded()
+    }
+
+    // Custom saver for LazyListState
+    val LazyListStateSaver = Saver<LazyListState, Bundle>(
+        save = { state ->
+            Bundle().apply {
+                putInt("firstVisibleItemIndex", state.firstVisibleItemIndex)
+                putFloat("firstVisibleItemScrollOffset", state.firstVisibleItemScrollOffset.toFloat())
+            }
+        },
+        restore = { bundle ->
+            LazyListState(
+                bundle.getInt("firstVisibleItemIndex", 0),
+                bundle.getFloat("firstVisibleItemScrollOffset", 0f).toInt()
+            )
         }
+    )
+
+    val listState = rememberSaveable(saver = LazyListStateSaver) {
+        LazyListState()
     }
 
     if (loading) {
@@ -115,14 +144,22 @@ fun DrinkListScreen(
         }
     } else {
         LazyColumn(
+            state = listState,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(16.dp)
         ) {
-            items(drinks) { drink ->
-                DrinkItem(drink = drink, onClick = {
-                    drink.idDrink?.let { id -> onDrinkSelected(id) }
-                })
+            items(
+                items = drinks,
+                // Use unique key for each item to maintain stable identity
+                key = { drink -> drink.idDrink ?: "" }
+            ) { drink ->
+                DrinkItem(
+                    drink = drink,
+                    onClick = {
+                        drink.idDrink?.let { id -> onDrinkSelected(id) }
+                    }
+                )
             }
         }
     }
@@ -137,6 +174,22 @@ fun DrinkItem(drink: DrinkSummary, onClick: () -> Unit) {
             .clickable { onClick() },
         elevation = CardDefaults.cardElevation(4.dp)
     ) {
+        AsyncImage(
+            model = ImageRequest.Builder(LocalContext.current)
+                .data(drink.strDrinkThumb)
+                .crossfade(true)
+//                .placeholder(R.drawable.placeholder)
+//                .error(R.drawable.error_image)
+                .build(),
+            contentDescription = null,
+            modifier = Modifier
+//                .fillMaxWidth()
+                .fillMaxSize(),
+//                .width(200.dp)
+//                .height(200.dp),
+            contentScale = ContentScale.Crop
+        )
+        Spacer(modifier = Modifier.height(8.dp))
         Text(
             text = drink.strDrink ?: "Brak nazwy",
             style = MaterialTheme.typography.titleMedium,

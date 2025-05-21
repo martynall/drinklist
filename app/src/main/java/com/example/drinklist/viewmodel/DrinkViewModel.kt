@@ -12,6 +12,7 @@ import kotlinx.coroutines.launch
 import retrofit2.Response
 
 class DrinkViewModel : ViewModel() {
+
     private val _drinkList = MutableStateFlow<List<DrinkSummary>>(emptyList())
     val drinkList: StateFlow<List<DrinkSummary>> = _drinkList
 
@@ -21,6 +22,15 @@ class DrinkViewModel : ViewModel() {
     private val _loading = MutableStateFlow(false)
     val loading: StateFlow<Boolean> = _loading
 
+    private var _initialized = false // Nowa flaga
+
+
+    fun fetchDrinksIfNeeded() {
+        if (!_initialized) {
+            _initialized = true
+            fetchDrinks()
+        }
+    }
     // Funkcja do pobierania listy drinków
     fun fetchDrinks() {
         viewModelScope.launch {

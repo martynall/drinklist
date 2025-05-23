@@ -1,5 +1,6 @@
 package com.example.drinklist
 
+import android.annotation.SuppressLint
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -24,7 +25,6 @@ import com.example.drinklist.ui.theme.DrinkListTheme
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -36,6 +36,20 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.drinklist.model.SplashScreen
 import kotlinx.coroutines.delay
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyGridState
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.runtime.saveable.listSaver
+
+val LazyGridStateSaver: Saver<LazyGridState, *> = listSaver(
+    save = { listOf(it.firstVisibleItemIndex, it.firstVisibleItemScrollOffset) },
+    restore = { LazyGridState(it[0], it[1]) }
+)
 
 
 class MainActivity : ComponentActivity() {
@@ -43,65 +57,237 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             DrinkListTheme {
-                var showSplash by rememberSaveable { mutableStateOf(true) }
+                Surface {
+                    var showSplash by rememberSaveable { mutableStateOf(true) }
 
-                LaunchedEffect(Unit) {
-                    delay(2000) // np. czas trwania animacji
-                    showSplash = false
-                }
+                    LaunchedEffect(Unit) {
+                        delay(2000) // splash screen duration
+                        showSplash = false
+                    }
 
-                if (showSplash) {
-                    SplashScreen(navigateToMain = { showSplash = false })
-                } else {
-                    val screenWidthDp = LocalConfiguration.current.screenWidthDp
-                    val isTabletLayout = screenWidthDp >= 600
-                    val timeLeft = remember { mutableStateOf(0) }
-                    val isRunning = remember { mutableStateOf(false) }
-                    val selectedDrinkId = remember { mutableStateOf<String?>(null) }
-                    val drinkViewModel: DrinkViewModel = viewModel(
-                        factory = DrinkViewModelFactory()
-                    )
-
-                    if (isTabletLayout) {
-                        Row(Modifier.fillMaxSize()) {
-                            Box(Modifier.weight(0.5f)) {
-                                DrinkListScreen(
-                                    drinkViewModel = drinkViewModel,
-                                    onDrinkSelected = { selectedDrinkId.value = it }
-                                )
-                            }
-                            Box(Modifier.weight(1f)) {
-                                selectedDrinkId.value?.let {
-                                    DrinkDetailScreen(
-                                        viewModel = drinkViewModel,
-                                        drinkId = it,
-                                        onBack = { selectedDrinkId.value = null }
-                                    )
-                                }
-                            }
-                        }
+                    if (showSplash) {
+                        SplashScreen(navigateToMain = { showSplash = false })
                     } else {
-                        var currentScreen by remember { mutableStateOf("list") }
-
-                        if (currentScreen == "list") {
-                            DrinkListScreen(
-                                drinkViewModel = drinkViewModel,
-                                onDrinkSelected = {
-                                    selectedDrinkId.value = it
-                                    currentScreen = "detail"
-                                }
-                            )
-                        } else {
-                            selectedDrinkId.value?.let {
-                                DrinkDetailScreen(
-                                    viewModel = drinkViewModel,
-                                    drinkId = it,
-                                    onBack = { currentScreen = "list" },
-                                )
-                            }
-                        }
+                        MainApp()
                     }
                 }
+            }
+        }
+    }
+}
+
+@SuppressLint("ConfigurationScreenWidthHeight")
+@Composable
+fun MainApp() {
+    val screenWidthDp = LocalConfiguration.current.screenWidthDp
+    val isTabletLayout = screenWidthDp >= 600
+    val selectedDrinkId = rememberSaveable { mutableStateOf<String?>(null) }
+    val selectedTabIndex = rememberSaveable { mutableIntStateOf(0) } // Track selected tab
+    val drinkViewModel: DrinkViewModel = viewModel(factory = DrinkViewModelFactory())
+
+    if (isTabletLayout) {
+        TabletLayout(
+            drinkViewModel = drinkViewModel,
+            selectedDrinkId = selectedDrinkId,
+            selectedTabIndex = selectedTabIndex
+        )
+    } else {
+        PhoneLayout(
+            drinkViewModel = drinkViewModel,
+            selectedDrinkId = selectedDrinkId,
+            selectedTabIndex = selectedTabIndex
+        )
+    }
+}
+
+@Composable
+fun TabletLayout(
+    drinkViewModel: DrinkViewModel,
+    selectedDrinkId: MutableState<String?>,
+    selectedTabIndex: MutableIntState
+) {
+    Row(Modifier.fillMaxSize()) {
+        if (selectedDrinkId.value == null) {
+            // Full screen tabs when no drink is selected
+            DrinkTabsScreen(
+                drinkViewModel = drinkViewModel,
+                onDrinkSelected = { selectedDrinkId.value = it },
+                selectedTabIndex = selectedTabIndex,
+                isTablet = true
+            )
+        } else {
+            // Split view when drink is selected
+            Box(Modifier.weight(0.5f)) {
+                DrinkTabsScreen(
+                    drinkViewModel = drinkViewModel,
+                    onDrinkSelected = { selectedDrinkId.value = it },
+                    selectedTabIndex = selectedTabIndex,
+                    isTablet = true
+                )
+            }
+            Box(Modifier.weight(0.5f)) {
+                selectedDrinkId.value?.let {
+                    DrinkDetailScreen(
+                        viewModel = drinkViewModel,
+                        drinkId = it,
+                        onBack = { selectedDrinkId.value = null }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun PhoneLayout(
+    drinkViewModel: DrinkViewModel,
+    selectedDrinkId: MutableState<String?>,
+    selectedTabIndex: MutableIntState
+) {
+    var currentScreen by rememberSaveable { mutableStateOf("tabs") }
+
+    if (currentScreen == "tabs") {
+        DrinkTabsScreen(
+            drinkViewModel = drinkViewModel,
+            onDrinkSelected = {
+                selectedDrinkId.value = it
+                currentScreen = "detail"
+            },
+            selectedTabIndex = selectedTabIndex
+        )
+    } else {
+        selectedDrinkId.value?.let {
+            DrinkDetailScreen(
+                viewModel = drinkViewModel,
+                drinkId = it,
+                onBack = { currentScreen = "tabs" }
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DrinkTabsScreen(
+    drinkViewModel: DrinkViewModel,
+    onDrinkSelected: (String) -> Unit,
+    selectedTabIndex: MutableIntState,
+    isTablet: Boolean = false
+) {
+    val tabs = listOf("App Info", "Alcoholic", "Non-Alcoholic")
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        TabRow(selectedTabIndex = selectedTabIndex.intValue) {
+            tabs.forEachIndexed { index, title ->
+                Tab(
+                    selected = selectedTabIndex.intValue == index,
+                    onClick = {
+                        selectedTabIndex.intValue = index
+                        if (index > 0) { // Don't fetch for App Info tab
+                            drinkViewModel.fetchDrinksIfNeeded(
+                                when (index) {
+                                    1 -> "Alcoholic"
+                                    2 -> "Non_Alcoholic"
+                                    else -> null
+                                }
+                            )
+                        }
+                    },
+                    text = { Text(text = title) }
+                )
+            }
+        }
+
+        // Content for each tab
+        when (selectedTabIndex.intValue) {
+            0 -> AppInfoScreen(isTablet)
+            1 -> DrinkListContent(drinkViewModel, onDrinkSelected)
+            2 -> DrinkListContent(drinkViewModel, onDrinkSelected)
+        }
+    }
+}
+
+
+@Composable
+fun AppInfoScreen(isTablet: Boolean) {
+    val scrollState = rememberScrollState()
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(scrollState)
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = "Cocktail Explorer",
+            style = MaterialTheme.typography.headlineLarge,
+            modifier = Modifier.padding(bottom = 16.dp)
+        )
+                    AsyncImage(
+                    model = "https://www.thecocktaildb.com/images/logo.png",
+            contentDescription = "App Logo",
+            modifier = Modifier
+                .size(if (isTablet) 200.dp else 150.dp)
+                .padding(bottom = 16.dp)
+        )
+
+        Text(
+            text = "Discover and explore delicious cocktail recipes from around the world.",
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.padding(bottom = 16.dp)
+        )
+
+        Text(
+            text = "Features:",
+            style = MaterialTheme.typography.titleLarge,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+                    Column(modifier = Modifier.padding(start = 16.dp)) {
+                Text("• Browse hundreds of cocktail recipes")
+                Text("• Filter by alcoholic/non-alcoholic")
+                Text("• Detailed preparation instructions")
+                Text("• Responsive design for all devices")
+            }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Text(
+                    text = "Data provided by TheCocktailDB",
+            style = MaterialTheme.typography.bodySmall
+        )
+    }
+}
+
+@Composable
+fun DrinkListContent(
+    drinkViewModel: DrinkViewModel,
+    onDrinkSelected: (String) -> Unit
+) {
+    val drinks by drinkViewModel.drinkList.collectAsState()
+    val loading by drinkViewModel.loading.collectAsState()
+
+    if (loading && drinks.isEmpty()) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator()
+        }
+    } else {
+        val gridState = rememberSaveable(saver = LazyGridStateSaver) {
+            LazyGridState()
+        }
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(2),
+            state = gridState,
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(items = drinks, key = { it.idDrink ?: "" }) { drink ->
+                DrinkItem(
+                    drink = drink,
+                    onClick = { drink.idDrink?.let(onDrinkSelected) }
+                )
             }
         }
     }
@@ -109,33 +295,14 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun DrinkListScreen(
     drinkViewModel: DrinkViewModel,
-    onDrinkSelected: (String) -> Unit
+    onDrinkSelected: (String) -> Unit,
+    filter: String? = null
 ) {
     val drinks by drinkViewModel.drinkList.collectAsState()
     val loading by drinkViewModel.loading.collectAsState()
 
-    LaunchedEffect(Unit) {
-        drinkViewModel.fetchDrinksIfNeeded()
-    }
-
-    // Custom saver for LazyListState
-    val LazyListStateSaver = Saver<LazyListState, Bundle>(
-        save = { state ->
-            Bundle().apply {
-                putInt("firstVisibleItemIndex", state.firstVisibleItemIndex)
-                putFloat("firstVisibleItemScrollOffset", state.firstVisibleItemScrollOffset.toFloat())
-            }
-        },
-        restore = { bundle ->
-            LazyListState(
-                bundle.getInt("firstVisibleItemIndex", 0),
-                bundle.getFloat("firstVisibleItemScrollOffset", 0f).toInt()
-            )
-        }
-    )
-
-    val listState = rememberSaveable(saver = LazyListStateSaver) {
-        LazyListState()
+    LaunchedEffect(filter) {
+        drinkViewModel.fetchDrinksIfNeeded(filter)
     }
 
     if (loading) {
@@ -143,15 +310,21 @@ fun DrinkListScreen(
             CircularProgressIndicator()
         }
     } else {
-        LazyColumn(
-            state = listState,
+        val gridState = rememberSaveable(saver = LazyGridStateSaver) {
+            LazyGridState()
+        }
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(2),
+            state = gridState,
             modifier = Modifier
                 .fillMaxSize()
-                .padding(16.dp)
+                .padding(10.dp),
+            contentPadding = PaddingValues(10.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             items(
                 items = drinks,
-                // Use unique key for each item to maintain stable identity
                 key = { drink -> drink.idDrink ?: "" }
             ) { drink ->
                 DrinkItem(
@@ -170,31 +343,37 @@ fun DrinkItem(drink: DrinkSummary, onClick: () -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(8.dp)
             .clickable { onClick() },
         elevation = CardDefaults.cardElevation(4.dp)
     ) {
-        AsyncImage(
-            model = ImageRequest.Builder(LocalContext.current)
-                .data(drink.strDrinkThumb)
-                .crossfade(true)
-//                .placeholder(R.drawable.placeholder)
-//                .error(R.drawable.error_image)
-                .build(),
-            contentDescription = null,
-            modifier = Modifier
-//                .fillMaxWidth()
-                .fillMaxSize(),
-//                .width(200.dp)
-//                .height(200.dp),
-            contentScale = ContentScale.Crop
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = drink.strDrink ?: "Brak nazwy",
-            style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.padding(16.dp)
-        )
+        Column {
+            // Square image container
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1f)
+            ) {
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(drink.strDrinkThumb)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            }
+
+            Text(
+                text = drink.strDrink ?: "Brak nazwy",
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier
+                    .padding(8.dp)
+                    .heightIn(min = 40.dp),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
     }
 }
 
@@ -203,31 +382,29 @@ fun DrinkItem(drink: DrinkSummary, onClick: () -> Unit) {
 fun DrinkDetailScreen(
     viewModel: DrinkViewModel,
     drinkId: String,
-    onBack: (() -> Unit)? = null // null na tablecie, przekazany na telefonie
+    onBack: (() -> Unit)? = null
 ) {
     val drinkDetail by viewModel.selectedDrink.collectAsState()
     val loading by viewModel.loading.collectAsState()
 
-    // Wykonaj fetch szczegółów tylko raz, kiedy drinkId się zmieni
     LaunchedEffect(drinkId) {
         viewModel.fetchDrinkDetail(drinkId)
     }
 
-    // Zarządzanie stanem timera
-    val timeLeft = rememberSaveable { mutableStateOf(0) } // Zapisywanie stanu czasu
-    val isRunning = rememberSaveable { mutableStateOf(false) } // Zapisywanie stanu stopera (czy działa)
+    val timeLeft = rememberSaveable { mutableStateOf(0) }
+    val isRunning = rememberSaveable { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState()) // <-- Scroll!
+            .verticalScroll(rememberScrollState())
     ) {
         if (onBack != null) {
             CenterAlignedTopAppBar(
                 title = { Text("Drink Details") },
                 navigationIcon = {
                     IconButton(onClick = { onBack() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 }
             )
@@ -240,6 +417,19 @@ fun DrinkDetailScreen(
                 }
             } else {
                 drinkDetail?.let { drink ->
+                    AsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(drink.strDrinkThumb)
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = null,
+                        modifier = Modifier
+                            .fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
                     Text(
                         text = drink.strDrink ?: "Brak nazwy",
                         style = MaterialTheme.typography.headlineMedium
@@ -274,7 +464,6 @@ fun DrinkDetailScreen(
 
                     Spacer(modifier = Modifier.height(32.dp))
 
-                    // Wywołanie TimerFragment z odpowiednimi parametrami
                     TimerFragment(
                         timeLeft = timeLeft.value,
                         setTimeLeft = { timeLeft.value = it },
@@ -296,5 +485,19 @@ fun PreviewPhoneLayout() {
         onDrinkSelected = {}
     )
 }
+
+@Composable
+fun fabSMS(onClick: () -> Unit) {
+    SmallFloatingActionButton(
+        onClick = { onClick() },
+        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+        contentColor = MaterialTheme.colorScheme.secondary
+    ) {
+        Icon(Icons.Filled.Add, "Small floating action button.")
+    }
+}
+
+
+
 
 

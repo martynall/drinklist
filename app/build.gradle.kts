@@ -76,4 +76,8 @@ dependencies {
 
     // Zależności potrzebne do pracy z akcelerometrem
     implementation("androidx.compose.ui:ui-graphics:1.1.1")
+
+    implementation("androidx.compose.foundation:foundation:1.4.0")
+
+    implementation(platform("androidx.compose:compose-bom:2025.05.00"))
 }

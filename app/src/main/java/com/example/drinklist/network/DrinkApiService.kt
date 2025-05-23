@@ -7,13 +7,19 @@ import retrofit2.http.GET
 import retrofit2.http.Query
 
 interface DrinkApiService {
-    // Metoda do pobierania listy drinków
+    // Get popular cocktails (main page)
     @GET("filter.php")
-    suspend fun getDrinks(
+    suspend fun getPopularDrinks(
         @Query("c") category: String = "Cocktail"
     ): Response<DrinkListResponse>
 
-    // Metoda do pobierania szczegółów drinka po ID
+    // Get drinks by alcoholic filter
+    @GET("filter.php")
+    suspend fun getDrinksByAlcoholic(
+        @Query("a") alcoholic: String // "Alcoholic" or "Non_Alcoholic"
+    ): Response<DrinkListResponse>
+
+    // Get drink details by ID
     @GET("lookup.php")
     suspend fun getDrinkDetail(
         @Query("i") drinkId: String

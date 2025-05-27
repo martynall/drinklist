@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">DrinkList</string>
+    <string name="details">Details</string>
 </resources>

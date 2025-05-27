@@ -30,6 +30,17 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+
+        <activity
+            android:name=".DetailActivity"
+            android:exported="false"
+            android:label="@string/details"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize"
+            android:theme="@style/Theme.DrinkList" >
+
+        </activity>
+
     </application>
 
 </manifest>

@@ -45,6 +45,8 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.runtime.saveable.listSaver
+import android.content.Intent
+
 
 val LazyGridStateSaver: Saver<LazyGridState, *> = listSaver(
     save = { listOf(it.firstVisibleItemIndex, it.firstVisibleItemScrollOffset) },
@@ -145,7 +147,7 @@ fun PhoneLayout(
     selectedTabIndex: MutableIntState
 ) {
     var currentScreen by rememberSaveable { mutableStateOf("tabs") }
-
+    val context = LocalContext.current
     if (currentScreen == "tabs") {
         DrinkTabsScreen(
             drinkViewModel = drinkViewModel,
@@ -156,6 +158,10 @@ fun PhoneLayout(
             selectedTabIndex = selectedTabIndex
         )
     } else {
+        val intent =  Intent(LocalContext.current, DetailActivity::class.java)
+        intent.putExtra("drinkId", selectedDrinkId.value)
+        context.startActivity(intent)
+
         selectedDrinkId.value?.let {
             DrinkDetailScreen(
                 viewModel = drinkViewModel,
@@ -298,6 +304,7 @@ fun DrinkListScreen(
     onDrinkSelected: (String) -> Unit,
     filter: String? = null
 ) {
+    val context = LocalContext.current
     val drinks by drinkViewModel.drinkList.collectAsState()
     val loading by drinkViewModel.loading.collectAsState()
 

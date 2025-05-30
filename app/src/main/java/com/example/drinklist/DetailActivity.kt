@@ -1,9 +1,13 @@
 package com.example.drinklist
 
-import com.example.drinklist.model.DrinkDetail
+
+import android.Manifest
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import android.content.Intent
+import android.content.Context
+import android.content.pm.PackageManager
+import android.telephony.SmsManager
 import androidx.activity.compose.setContent
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.mutableStateOf
@@ -22,11 +26,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.windowsizeclass.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
@@ -40,6 +46,11 @@ import com.example.drinklist.viewmodel.DrinkViewModelFactory
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import android.net.Uri
+import android.widget.Toast
+import androidx.core.content.ContextCompat
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 
 
 class DetailActivity : ComponentActivity() {
@@ -49,6 +60,7 @@ class DetailActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val intent = intent
         val drinkId = intent.getStringExtra("drinkId") ?: ""
+        val telephoneNumber = intent.getStringExtra("phoneNumber") ?: ""
         setContent {
             val drinkViewModel = viewModel<DrinkViewModel>(factory = DrinkViewModelFactory())
             val windowSizeClass = calculateWindowSizeClass(this)
@@ -61,11 +73,17 @@ class DetailActivity : ComponentActivity() {
             DrinkListTheme {
                 val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
                 Scaffold(
+                    floatingActionButton = {
+                        FloatingActionButton(onClick = {null}) {
+
+                            Icon(Icons.Default.PlayArrow, contentDescription = "Play")
+                        }
+                    },
                     modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
                     topBar = {
-                        LargeTopAppBar( // Użyj odpowiedniego TopAppBar (Large, Medium, CenterAligned, Small)
+                        CenterAlignedTopAppBar( // Użyj odpowiedniego TopAppBar (Large, Medium, CenterAligned, Small)
                             title = {
-                                Column(
+                                Row(
                                     modifier = Modifier.fillMaxWidth(),
                                 ) {
                                     drink?.let { dr ->
@@ -76,31 +94,35 @@ class DetailActivity : ComponentActivity() {
                                                 .build(),
                                             contentDescription = null,
                                             modifier = Modifier
-                                                .fillMaxSize(), // Ustaw wysokość obrazka
+                                                .fillMaxHeight(), // Ustaw wysokość obrazka
                                             contentScale = ContentScale.Fit,
                                         )
                                     }
                                     Text("Mój Dynamiczny Tytuł")
                                 }
                             },
+                            navigationIcon = {
+                                IconButton(onClick = { finish() }) {
+                                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                                }
+                            },
                             scrollBehavior = scrollBehavior // Przypisz zachowanie przewijania do paska
                         )
 
                     }) {
-                    internalPadding ->
+                        internalPadding ->
                     Box(
                         modifier = Modifier
-                            .fillMaxSize()
                             .padding(internalPadding)
                     ) {
-                        Surface(
-                            modifier = Modifier.fillMaxSize(),
-                            color = MaterialTheme.colorScheme.background
-                        ) {
-
-                        }
+                        DrinkDetailScreen(
+                            sizeClass = windowSizeClass,
+                            viewModel = drinkViewModel,
+                            drinkId = drinkId,
+                            onBack = null)
                     }
                 }
+
             }
         }
     }
@@ -108,10 +130,9 @@ class DetailActivity : ComponentActivity() {
 
 
 @Composable
-fun id(){
-    val context = LocalContext.current
-    val message = (context as? ComponentActivity)?.intent?.getStringExtra("drinkId") ?: "No message"
-    Text(text = message)
+fun App(){
+
+
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -149,6 +170,7 @@ fun DrinkDetailScreen(
             )
         }
 
+
         Column(modifier = Modifier.padding(16.dp)) {
             if (loading) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -163,7 +185,7 @@ fun DrinkDetailScreen(
                             .build(),
                         contentDescription = null,
                         modifier = Modifier
-                            .fillMaxSize(),
+                            .fillMaxWidth(),
                         contentScale = ContentScale.Crop
                     )
 
@@ -216,28 +238,127 @@ fun DrinkDetailScreen(
 }
 
 
+@Composable
+fun SmsSenderScreenWithPermissions() {
+    val context = LocalContext.current // Uzyskaj kontekst
 
-//@ExperimentalMaterial3WindowSizeClassApi
-//@Composable
-//fun rememberWindowSizeClass(): WindowSizeClass {
-//
-//    val configuration = LocalConfiguration.current
-//    val screenWidth = configuration.screenWidthDp
-//    val screenHeight = configuration.screenHeightDp
-//
-//    val widthSizeClass = when {
-//        screenWidth < 600 -> WindowWidthSizeClass.Compact // Typowy smartfon
-//        screenWidth < 840 -> WindowWidthSizeClass.Medium // Małe tablety, składane
-//        else -> WindowWidthSizeClass.Expanded // Większe tablety, desktop
-//    }
-//
-//    val heightSizeClass = when {
-//        screenHeight < 480 -> WindowHeightSizeClass.Compact
-//        screenHeight < 900 -> WindowHeightSizeClass.Medium
-//        else -> WindowHeightSizeClass.Expanded
-//    }
-//
-//    return WindowSizeClass(widthSizeClass, heightSizeClass)
-//}
+    var phoneNumber by remember { mutableStateOf("") }
+    var message by remember { mutableStateOf("") }
+
+    // Launcher do obsługi prośby o uprawnienia
+    // Lambdą jest funkcja zwrotna, która zostanie wywołana po udzieleniu/odmowie uprawnienia
+    val requestPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted: Boolean ->
+        if (isGranted) {
+            // Uprawnienie przyznane, spróbuj wysłać SMS-a
+            sendSmsDirectly(context, phoneNumber, message)
+        } else {
+            // Uprawnienie odrzucone
+            Toast.makeText(context, "Uprawnienie do wysyłania SMS odrzucone.", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp)
+    ) {
+        OutlinedTextField(
+            value = phoneNumber,
+            onValueChange = { phoneNumber = it },
+            label = { Text("Numer telefonu") },
+            modifier = Modifier.fillMaxWidth()
+        )
+        OutlinedTextField(
+            value = message,
+            onValueChange = { message = it },
+            label = { Text("Wiadomość") },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp)
+        )
+        Button(
+            onClick = {
+                // Sprawdź, czy pola tekstowe nie są puste
+                if (phoneNumber.isBlank() || message.isBlank()) {
+                    Toast.makeText(context, "Wpisz numer telefonu i treść wiadomości.", Toast.LENGTH_SHORT).show()
+                    return@Button // Zakończ funkcję click listener
+                }
+
+                // Sprawdź, czy uprawnienie SEND_SMS jest już przyznane
+                when {
+                    ContextCompat.checkSelfPermission(
+                        context,
+                        Manifest.permission.SEND_SMS
+                    ) == PackageManager.PERMISSION_GRANTED -> {
+                        // Uprawnienie już przyznane, wyślij SMS-a bezpośrednio
+                        sendSmsDirectly(context, phoneNumber, message)
+                    }
+                    else -> {
+                        // Poproś o uprawnienie za pomocą launchera
+                        requestPermissionLauncher.launch(Manifest.permission.SEND_SMS)
+                    }
+                }
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 16.dp)
+        ) {
+            Text("Wyślij SMS bezpośrednio")
+        }
+    }
+}
 
 
+
+@Composable
+fun checkIfSmsSupported(): Boolean {
+    val context = LocalContext.current
+    return remember(context) { // Użyj remember, żeby to nie było obliczane przy każdej rekompozycji
+        context.packageManager.hasSystemFeature(PackageManager.FEATURE_TELEPHONY)
+    }
+}
+
+
+fun sendSmsDirectly(context: Context, phoneNumber: String, message: String) {
+    // 1. Sprawdź, czy uprawnienie SEND_SMS jest przyznane
+    if (ContextCompat.checkSelfPermission(context, Manifest.permission.SEND_SMS) != PackageManager.PERMISSION_GRANTED) {
+        Toast.makeText(context, "Brak uprawnienia do wysyłania SMS. Proszę przyznaj uprawnienie w ustawieniach aplikacji.", Toast.LENGTH_LONG).show()
+        // Możesz tutaj również rzucić wyjątek lub zwrócić wartość false, aby sygnalizować błąd
+        return
+    }
+
+    // 2. Sprawdź, czy numer i wiadomość nie są puste
+    if (phoneNumber.isBlank()) {
+        Toast.makeText(context, "Numer telefonu nie może być pusty.", Toast.LENGTH_SHORT).show()
+        return
+    }
+    if (message.isBlank()) {
+        Toast.makeText(context, "Wiadomość nie może być pusta.", Toast.LENGTH_SHORT).show()
+        return
+    }
+
+    // 3. Spróbuj wysłać SMS-a
+    try {
+        // Pobierz instancję SmsManager
+        // Używamy nowszego API dla Androida S (API 31) i wyżej, inaczej używamy getDefault()
+        val smsManager = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            context.getSystemService(SmsManager::class.java)
+        } else {
+            @Suppress("DEPRECATION") // Suppress lint warning for deprecated getDefault()
+            SmsManager.getDefault()
+        }
+
+        // Wysyłanie wiadomości tekstowej
+        // Ostatnie dwa parametry (sentIntent, deliveryIntent) mogą być użyte do otrzymywania powiadomień
+        // o statusie wysyłki i dostarczenia SMS-a, ale dla prostoty w tym przykładzie są null.
+        smsManager.sendTextMessage(phoneNumber, null, message, null, null)
+
+        Toast.makeText(context, "SMS wysłany pomyślnie na $phoneNumber!", Toast.LENGTH_SHORT).show()
+    } catch (e: Exception) {
+        // Obsługa błędów wysyłania
+        Toast.makeText(context, "Błąd wysyłania SMS: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+        e.printStackTrace() // Wypisz stos wyjątku do logcat dla debugowania
+    }
+}

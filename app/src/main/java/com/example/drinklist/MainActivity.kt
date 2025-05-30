@@ -46,6 +46,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.runtime.saveable.listSaver
 import android.content.Intent
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 
 
 val LazyGridStateSaver: Saver<LazyGridState, *> = listSaver(
@@ -86,6 +88,7 @@ fun MainApp() {
     val selectedDrinkId = rememberSaveable { mutableStateOf<String?>(null) }
     val selectedTabIndex = rememberSaveable { mutableIntStateOf(0) } // Track selected tab
     val drinkViewModel: DrinkViewModel = viewModel(factory = DrinkViewModelFactory())
+    val phoneNumber: MutableState<String> = rememberSaveable { mutableStateOf("") }
 
     if (isTabletLayout) {
         TabletLayout(
@@ -97,8 +100,11 @@ fun MainApp() {
         PhoneLayout(
             drinkViewModel = drinkViewModel,
             selectedDrinkId = selectedDrinkId,
-            selectedTabIndex = selectedTabIndex
+            selectedTabIndex = selectedTabIndex,
+            phoneNumber = phoneNumber.value,
+            onPhoneNumberChanged = { phoneNumber.value = it }
         )
+
     }
 }
 
@@ -128,6 +134,12 @@ fun TabletLayout(
                 )
             }
             Box(Modifier.weight(0.5f)) {
+                val context = LocalContext.current
+                val intent =  Intent(LocalContext.current, DetailActivity::class.java)
+                intent.putExtra("drinkId", selectedDrinkId.value)
+                intent.putExtra("phoneNumber", "111111")
+                context.startActivity(intent)
+
                 selectedDrinkId.value?.let {
                     DrinkDetailScreen(
                         viewModel = drinkViewModel,
@@ -144,7 +156,9 @@ fun TabletLayout(
 fun PhoneLayout(
     drinkViewModel: DrinkViewModel,
     selectedDrinkId: MutableState<String?>,
-    selectedTabIndex: MutableIntState
+    selectedTabIndex: MutableIntState,
+    phoneNumber: String,
+    onPhoneNumberChanged: (String) -> Unit = {}
 ) {
     var currentScreen by rememberSaveable { mutableStateOf("tabs") }
     val context = LocalContext.current
@@ -160,6 +174,7 @@ fun PhoneLayout(
     } else {
         val intent =  Intent(LocalContext.current, DetailActivity::class.java)
         intent.putExtra("drinkId", selectedDrinkId.value)
+        intent.putExtra("phoneNumber", phoneNumber)
         context.startActivity(intent)
 
         selectedDrinkId.value?.let {
@@ -203,19 +218,42 @@ fun DrinkTabsScreen(
                 )
             }
         }
-
+        val phoneNumber = rememberSaveable { mutableStateOf("") }
         // Content for each tab
         when (selectedTabIndex.intValue) {
-            0 -> AppInfoScreen(isTablet)
+            0 -> AppInfoScreen(isTablet,phoneNumber.value)
             1 -> DrinkListContent(drinkViewModel, onDrinkSelected)
             2 -> DrinkListContent(drinkViewModel, onDrinkSelected)
         }
     }
 }
 
+@Composable
+fun PhoneNumberInput(
+    phoneNumber: String,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    label: String = "Numer telefonu",
+    placeholder: String = "Wprowadź numer telefonu"
+) {
+    OutlinedTextField(
+        value = phoneNumber,
+        onValueChange = { newValue ->
+            // Optionally, add basic input validation here
+            // For example, allow only digits and '+'
+            val filteredValue = newValue.filter { it.isDigit() || it == '+' }
+            onValueChange(filteredValue)
+        },
+        label = { Text(label) },
+        placeholder = { Text(placeholder) },
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone), // Ensures phone number keyboard
+        singleLine = true,
+        modifier = modifier.fillMaxWidth()
+    )
+}
 
 @Composable
-fun AppInfoScreen(isTablet: Boolean) {
+fun AppInfoScreen(isTablet: Boolean, phoneNumber: String) {
     val scrollState = rememberScrollState()
 
     Column(
@@ -255,6 +293,7 @@ fun AppInfoScreen(isTablet: Boolean) {
                 Text("• Detailed preparation instructions")
                 Text("• Responsive design for all devices")
             }
+//            PhoneNumberInput()
 
                     Spacer(modifier = Modifier.height(16.dp))
 

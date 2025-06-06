@@ -297,15 +297,6 @@ fun AppInfoScreen(isTablet: Boolean, phoneNumber: String) {
                 Text("• Detailed preparation instructions")
                 Text("• Responsive design for all devices")
             }
-        PhoneNumberInput(
-            onPhoneNumberConfirmed = { number ->
-                confirmedNumber = number
-                // Tutaj możesz wykonać dodatkowe akcje po otrzymaniu numeru,
-                // np. nawigacja do następnego ekranu, wysłanie numeru do serwera itp.
-                println("Potwierdzony numer telefonu: $number")
-            }
-        )
-
                     Spacer(modifier = Modifier.height(16.dp))
 
                     Text(

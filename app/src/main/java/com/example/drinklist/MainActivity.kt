@@ -65,6 +65,7 @@ import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import android.content.Context
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 
 val LazyGridStateSaver: Saver<LazyGridState, *> = listSaver(
@@ -111,7 +112,7 @@ fun MainApp() {
     val screenHeightDp = LocalConfiguration.current.screenHeightDp
     val screenWidthDp = LocalConfiguration.current.screenWidthDp
     val isTabletLayout = remember (screenWidthDp, screenHeightDp) {
-        (screenHeightDp >= 960) && (screenWidthDp >= 600)
+        (screenHeightDp >= 600) && (screenWidthDp >= 600)
     }
     val selectedDrinkId = rememberSaveable { mutableStateOf<String?>(null) }
     val selectedTabIndex = rememberSaveable { mutableIntStateOf(0) } // Track selected tab
@@ -141,16 +142,7 @@ fun TabletLayout(
 ) {
     val context = LocalContext.current
 
-    Scaffold(
-        topBar = {
-            CenterAlignedTopAppBar(
-                title = { Text("DrinkBase") },
-                navigationIcon = {
-                    // Brak ikony nawigacji na układzie tabletu
-                }
-            )
-        }
-    ) { padding ->
+    Scaffold() { padding ->
         Row(Modifier.fillMaxSize().padding(padding)) {
             if (selectedDrinkId.value == null) {
                 // Full screen tabs when no drink is selected
@@ -196,20 +188,6 @@ fun PhoneLayout(
     val context = LocalContext.current
 
     Scaffold(
-        topBar = {
-            CenterAlignedTopAppBar(
-                title = { Text("DrinkBase") },
-                navigationIcon = {
-                    if (currentScreen == "detail") {
-                        IconButton(onClick = { currentScreen = "tabs" }) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                        }
-                    } else {
-                        // Brak ikony nawigacji na ekranie zakładek
-                    }
-                }
-            )
-        }
     ) { padding ->
         Box(modifier = Modifier.padding(padding)) {
             if (currentScreen == "tabs") {
@@ -284,8 +262,8 @@ fun DrinkTabsScreen(
         drawerContent = {
             ModalDrawerSheet {
                 NavigationDrawerItem(
-                    label = { Text(text = "Home") },
-                    selected = selectedTabIndex.intValue == 0,
+                    label = { Text(text = "App Info") },
+                    selected = false,
                     onClick = {
                         coroutineScope.launch {
                             pagerState.animateScrollToPage(0)
@@ -294,7 +272,33 @@ fun DrinkTabsScreen(
                         }
                     },
                     modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding),
-                    icon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = "Home") }
+                    icon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = "App Info") }
+                )
+                NavigationDrawerItem(
+                    label = { Text(text = "Alcoholic") },
+                    selected = false,
+                    onClick = {
+                        coroutineScope.launch {
+                            pagerState.animateScrollToPage(1)
+                            selectedTabIndex.intValue = 1
+                            drawerState.close()
+                        }
+                    },
+                    modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding),
+                    icon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = "Alcoholic") }
+                )
+                NavigationDrawerItem(
+                    label = { Text(text = "Non-Alcoholic") },
+                    selected = false,
+                    onClick = {
+                        coroutineScope.launch {
+                            pagerState.animateScrollToPage(2)
+                            selectedTabIndex.intValue = 2
+                            drawerState.close()
+                        }
+                    },
+                    modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding),
+                    icon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = "Non-Alcoholic") }
                 )
                 NavigationDrawerItem(
                     label = { Text(text = "Close Menu") },
@@ -302,7 +306,6 @@ fun DrinkTabsScreen(
                     onClick = { coroutineScope.launch { drawerState.close() } },
                     modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
                 )
-                // Dodaj więcej elementów menu tutaj
             }
         }
     ) {
@@ -425,9 +428,9 @@ fun DrinkListContent(
             columns = GridCells.Fixed(2),
             state = gridState,
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            contentPadding = PaddingValues(10.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             items(items = drinks, key = { it.idDrink ?: "" }) { drink ->
                 DrinkItem(
@@ -465,9 +468,9 @@ fun DrinkListScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(10.dp),
-            contentPadding = PaddingValues(10.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+            contentPadding = PaddingValues(15.dp),
+            verticalArrangement = Arrangement.spacedBy(15.dp),
+            horizontalArrangement = Arrangement.spacedBy(15.dp)
         ) {
             items(
                 items = drinks,
@@ -492,8 +495,9 @@ fun DrinkItem(drink: DrinkSummary, onClick: () -> Unit) {
             .clickable { onClick() },
         elevation = CardDefaults.cardElevation(4.dp)
     ) {
-        Column {
-            // Square image container
+        Column (
+            modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min)
+        ){
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -515,7 +519,8 @@ fun DrinkItem(drink: DrinkSummary, onClick: () -> Unit) {
                 style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier
                     .padding(8.dp)
-                    .heightIn(min = 40.dp),
+                    .heightIn(min = 60.dp)
+                    .weight(1f),
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
@@ -529,7 +534,7 @@ fun DrinkDetailScreen(
     viewModel: DrinkViewModel,
     drinkId: String,
     onBack: (() -> Unit)? = null,
-    onSendSms: ((List<String>) -> Unit)? = null // Dodaj callback dla wysyłania SMS
+    onSendSms: ((List<String>) -> Unit)? = null
 ) {
     val drinkDetail by viewModel.selectedDrink.collectAsState()
     val loading by viewModel.loading.collectAsState()
@@ -541,19 +546,41 @@ fun DrinkDetailScreen(
 
     val timeLeft = rememberSaveable { mutableStateOf(0) }
     val isRunning = rememberSaveable { mutableStateOf(false) }
+    val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
 
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            CenterAlignedTopAppBar(
-                title = { Text("Drink Details") },
+            CenterAlignedTopAppBar( // Użyj odpowiedniego TopAppBar (Large, Medium, CenterAligned, Small)
+                title = {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        drinkDetail?.let { dr ->
+                            AsyncImage(
+                                model = ImageRequest.Builder(LocalContext.current)
+                                    .data(dr.strDrinkThumb)
+                                    .crossfade(true)
+                                    .build(),
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .fillMaxHeight(), // Ustaw wysokość obrazka
+                                contentScale = ContentScale.Fit,
+                            )
+                        }
+                        drinkDetail?.strDrink?.let { Text(it) }
+                    }
+                },
                 navigationIcon = {
                     if (onBack != null) {
                         IconButton(onClick = { onBack() }) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                         }
                     }
-                }
+                },
+                scrollBehavior = scrollBehavior // Przypisz zachowanie przewijania do paska
             )
+
         },
         floatingActionButton = {
             if (onSendSms != null && drinkDetail != null) {
@@ -645,12 +672,17 @@ fun DrinkDetailScreen(
 
                     Spacer(modifier = Modifier.height(32.dp))
 
-                    TimerFragment(
-                        timeLeft = timeLeft.value,
-                        setTimeLeft = { timeLeft.value = it },
-                        isRunning = isRunning.value,
-                        setIsRunning = { isRunning.value = it }
-                    )
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        TimerFragment(
+                            timeLeft = timeLeft.value,
+                            setTimeLeft = { timeLeft.value = it },
+                            isRunning = isRunning.value,
+                            setIsRunning = { isRunning.value = it }
+                        )
+                    }
                 }
             }
         }
@@ -668,16 +700,6 @@ fun PreviewPhoneLayout() {
     )
 }
 
-@Composable
-fun fabSMS(onClick: () -> Unit) {
-    SmallFloatingActionButton(
-        onClick = { onClick() },
-        containerColor = MaterialTheme.colorScheme.secondaryContainer,
-        contentColor = MaterialTheme.colorScheme.secondary
-    ) {
-        Icon(Icons.Filled.Add, "Small floating action button.")
-    }
-}
 
 
 

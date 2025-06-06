@@ -45,12 +45,41 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.material3.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.launch
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import android.content.Context
+import androidx.compose.ui.platform.LocalContext
 
 val LazyGridStateSaver: Saver<LazyGridState, *> = listSaver(
     save = { listOf(it.firstVisibleItemIndex, it.firstVisibleItemScrollOffset) },
     restore = { LazyGridState(it[0], it[1]) }
 )
 
+private fun sendSms(context: Context, ingredients: List<String>) {
+    val smsText = "Składniki drinka:\n" + ingredients.joinToString("\n")
+    val uri = Uri.parse("smsto:")
+    val intent = Intent(Intent.ACTION_SENDTO, uri).apply {
+        putExtra("sms_body", smsText)
+    }
+    context.startActivity(intent)
+}
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -79,8 +108,11 @@ class MainActivity : ComponentActivity() {
 @SuppressLint("ConfigurationScreenWidthHeight")
 @Composable
 fun MainApp() {
+    val screenHeightDp = LocalConfiguration.current.screenHeightDp
     val screenWidthDp = LocalConfiguration.current.screenWidthDp
-    val isTabletLayout = screenWidthDp >= 600
+    val isTabletLayout = remember (screenWidthDp, screenHeightDp) {
+        (screenHeightDp >= 960) && (screenWidthDp >= 600)
+    }
     val selectedDrinkId = rememberSaveable { mutableStateOf<String?>(null) }
     val selectedTabIndex = rememberSaveable { mutableIntStateOf(0) } // Track selected tab
     val drinkViewModel: DrinkViewModel = viewModel(factory = DrinkViewModelFactory())
@@ -100,44 +132,60 @@ fun MainApp() {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TabletLayout(
     drinkViewModel: DrinkViewModel,
     selectedDrinkId: MutableState<String?>,
     selectedTabIndex: MutableIntState
 ) {
-    Row(Modifier.fillMaxSize()) {
-        if (selectedDrinkId.value == null) {
-            // Full screen tabs when no drink is selected
-            DrinkTabsScreen(
-                drinkViewModel = drinkViewModel,
-                onDrinkSelected = { selectedDrinkId.value = it },
-                selectedTabIndex = selectedTabIndex,
-                isTablet = true
+    val context = LocalContext.current
+
+    Scaffold(
+        topBar = {
+            CenterAlignedTopAppBar(
+                title = { Text("DrinkBase") },
+                navigationIcon = {
+                    // Brak ikony nawigacji na układzie tabletu
+                }
             )
-        } else {
-            // Split view when drink is selected
-            Box(Modifier.weight(0.5f)) {
+        }
+    ) { padding ->
+        Row(Modifier.fillMaxSize().padding(padding)) {
+            if (selectedDrinkId.value == null) {
+                // Full screen tabs when no drink is selected
                 DrinkTabsScreen(
                     drinkViewModel = drinkViewModel,
                     onDrinkSelected = { selectedDrinkId.value = it },
                     selectedTabIndex = selectedTabIndex,
                     isTablet = true
                 )
-            }
-            Box(Modifier.weight(0.5f)) {
-                selectedDrinkId.value?.let {
-                    DrinkDetailScreen(
-                        viewModel = drinkViewModel,
-                        drinkId = it,
-                        onBack = { selectedDrinkId.value = null }
+            } else {
+                // Split view when drink is selected
+                Box(Modifier.weight(0.5f)) {
+                    DrinkTabsScreen(
+                        drinkViewModel = drinkViewModel,
+                        onDrinkSelected = { selectedDrinkId.value = it },
+                        selectedTabIndex = selectedTabIndex,
+                        isTablet = true
                     )
+                }
+                Box(Modifier.weight(0.5f)) {
+                    selectedDrinkId.value?.let {
+                        DrinkDetailScreen(
+                            viewModel = drinkViewModel,
+                            drinkId = it,
+                            onBack = { selectedDrinkId.value = null },
+                            onSendSms = { ingredients -> sendSms(context, ingredients) } // Dodaj obsługę wysyłania SMS
+                        )
+                    }
                 }
             }
         }
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PhoneLayout(
     drinkViewModel: DrinkViewModel,
@@ -145,28 +193,49 @@ fun PhoneLayout(
     selectedTabIndex: MutableIntState
 ) {
     var currentScreen by rememberSaveable { mutableStateOf("tabs") }
+    val context = LocalContext.current
 
-    if (currentScreen == "tabs") {
-        DrinkTabsScreen(
-            drinkViewModel = drinkViewModel,
-            onDrinkSelected = {
-                selectedDrinkId.value = it
-                currentScreen = "detail"
-            },
-            selectedTabIndex = selectedTabIndex
-        )
-    } else {
-        selectedDrinkId.value?.let {
-            DrinkDetailScreen(
-                viewModel = drinkViewModel,
-                drinkId = it,
-                onBack = { currentScreen = "tabs" }
+    Scaffold(
+        topBar = {
+            CenterAlignedTopAppBar(
+                title = { Text("DrinkBase") },
+                navigationIcon = {
+                    if (currentScreen == "detail") {
+                        IconButton(onClick = { currentScreen = "tabs" }) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        }
+                    } else {
+                        // Brak ikony nawigacji na ekranie zakładek
+                    }
+                }
             )
+        }
+    ) { padding ->
+        Box(modifier = Modifier.padding(padding)) {
+            if (currentScreen == "tabs") {
+                DrinkTabsScreen(
+                    drinkViewModel = drinkViewModel,
+                    onDrinkSelected = {
+                        selectedDrinkId.value = it
+                        currentScreen = "detail"
+                    },
+                    selectedTabIndex = selectedTabIndex
+                )
+            } else {
+                selectedDrinkId.value?.let {
+                    DrinkDetailScreen(
+                        viewModel = drinkViewModel,
+                        drinkId = it,
+                        onBack = { currentScreen = "tabs" },
+                        onSendSms = { ingredients -> sendSms(context, ingredients) } // Dodaj obsługę wysyłania SMS
+                    )
+                }
+            }
         }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun DrinkTabsScreen(
     drinkViewModel: DrinkViewModel,
@@ -175,38 +244,115 @@ fun DrinkTabsScreen(
     isTablet: Boolean = false
 ) {
     val tabs = listOf("App Info", "Alcoholic", "Non-Alcoholic")
+    val pagerState = rememberPagerState(
+        initialPage = selectedTabIndex.intValue,
+        pageCount = { tabs.size }
+    )
+    val coroutineScope = rememberCoroutineScope()
+    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    val context = LocalContext.current
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        TabRow(selectedTabIndex = selectedTabIndex.intValue) {
-            tabs.forEachIndexed { index, title ->
-                Tab(
-                    selected = selectedTabIndex.intValue == index,
-                    onClick = {
-                        selectedTabIndex.intValue = index
-                        if (index > 0) { // Don't fetch for App Info tab
-                            drinkViewModel.fetchDrinksIfNeeded(
-                                when (index) {
-                                    1 -> "Alcoholic"
-                                    2 -> "Non_Alcoholic"
-                                    else -> null
-                                }
-                            )
-                        }
-                    },
-                    text = { Text(text = title) }
-                )
+    LaunchedEffect(pagerState) {
+        snapshotFlow { pagerState.currentPage }
+            .distinctUntilChanged()
+            .collect { page ->
+                selectedTabIndex.intValue = page
             }
-        }
+    }
 
-        // Content for each tab
-        when (selectedTabIndex.intValue) {
-            0 -> AppInfoScreen(isTablet)
-            1 -> DrinkListContent(drinkViewModel, onDrinkSelected)
-            2 -> DrinkListContent(drinkViewModel, onDrinkSelected)
+    LaunchedEffect(selectedTabIndex.intValue) {
+        if (selectedTabIndex.intValue != pagerState.currentPage) {
+            pagerState.animateScrollToPage(selectedTabIndex.intValue)
         }
     }
-}
 
+    LaunchedEffect(pagerState.currentPage) {
+        val currentPage = pagerState.currentPage
+        if (currentPage > 0) {
+            drinkViewModel.fetchDrinksIfNeeded(
+                when (currentPage) {
+                    1 -> "Alcoholic"
+                    2 -> "Non_Alcoholic"
+                    else -> null
+                }
+            )
+        }
+    }
+
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        drawerContent = {
+            ModalDrawerSheet {
+                NavigationDrawerItem(
+                    label = { Text(text = "Home") },
+                    selected = selectedTabIndex.intValue == 0,
+                    onClick = {
+                        coroutineScope.launch {
+                            pagerState.animateScrollToPage(0)
+                            selectedTabIndex.intValue = 0
+                            drawerState.close()
+                        }
+                    },
+                    modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding),
+                    icon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = "Home") }
+                )
+                NavigationDrawerItem(
+                    label = { Text(text = "Close Menu") },
+                    selected = false,
+                    onClick = { coroutineScope.launch { drawerState.close() } },
+                    modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
+                )
+                // Dodaj więcej elementów menu tutaj
+            }
+        }
+    ) {
+        Scaffold(
+            topBar = {
+                CenterAlignedTopAppBar(
+                    title = { Text("DrinkBase") },
+                    navigationIcon = {
+                        IconButton(onClick = { coroutineScope.launch { drawerState.open() } }) {
+                            Icon(Icons.Filled.Menu, contentDescription = "Menu")
+                        }
+                    }
+                )
+            },
+            content = { padding ->
+                Column(modifier = Modifier.padding(padding)) {
+                    TabRow(
+                        selectedTabIndex = pagerState.currentPage,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        tabs.forEachIndexed { index, title ->
+                            Tab(
+                                selected = pagerState.currentPage == index,
+                                onClick = {
+                                    coroutineScope.launch {
+                                        pagerState.animateScrollToPage(index)
+                                    }
+                                },
+                                text = { Text(text = title) }
+                            )
+                        }
+                    }
+
+                    HorizontalPager(
+                        state = pagerState,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                    ) { page ->
+                        when (page) {
+                            0 -> AppInfoScreen(isTablet)
+                            1 -> DrinkListContent(drinkViewModel, onDrinkSelected)
+                            2 -> DrinkListContent(drinkViewModel, onDrinkSelected)
+                        }
+                    }
+                }
+            }
+        )
+    }
+}
 
 @Composable
 fun AppInfoScreen(isTablet: Boolean) {
@@ -382,10 +528,12 @@ fun DrinkItem(drink: DrinkSummary, onClick: () -> Unit) {
 fun DrinkDetailScreen(
     viewModel: DrinkViewModel,
     drinkId: String,
-    onBack: (() -> Unit)? = null
+    onBack: (() -> Unit)? = null,
+    onSendSms: ((List<String>) -> Unit)? = null // Dodaj callback dla wysyłania SMS
 ) {
     val drinkDetail by viewModel.selectedDrink.collectAsState()
     val loading by viewModel.loading.collectAsState()
+    val context = LocalContext.current
 
     LaunchedEffect(drinkId) {
         viewModel.fetchDrinkDetail(drinkId)
@@ -394,23 +542,56 @@ fun DrinkDetailScreen(
     val timeLeft = rememberSaveable { mutableStateOf(0) }
     val isRunning = rememberSaveable { mutableStateOf(false) }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-    ) {
-        if (onBack != null) {
+    Scaffold(
+        topBar = {
             CenterAlignedTopAppBar(
                 title = { Text("Drink Details") },
                 navigationIcon = {
-                    IconButton(onClick = { onBack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    if (onBack != null) {
+                        IconButton(onClick = { onBack() }) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        }
                     }
                 }
             )
+        },
+        floatingActionButton = {
+            if (onSendSms != null && drinkDetail != null) {
+                SmallFloatingActionButton(
+                    onClick = {
+                        val ingredients = listOfNotNull(
+                            drinkDetail?.strIngredient1,
+                            drinkDetail?.strIngredient2,
+                            drinkDetail?.strIngredient3,
+                            drinkDetail?.strIngredient4,
+                            drinkDetail?.strIngredient5,
+                            drinkDetail?.strIngredient6,
+                            drinkDetail?.strIngredient7,
+                            drinkDetail?.strIngredient8,
+                            drinkDetail?.strIngredient9,
+                            drinkDetail?.strIngredient10,
+                            drinkDetail?.strIngredient11,
+                            drinkDetail?.strIngredient12,
+                            drinkDetail?.strIngredient13,
+                            drinkDetail?.strIngredient14,
+                            drinkDetail?.strIngredient15,
+                        )
+                        onSendSms(ingredients)
+                    },
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    contentColor = MaterialTheme.colorScheme.secondary
+                ) {
+                    Icon(Icons.Filled.Add, "Wyślij SMS ze składnikami")
+                }
+            }
         }
-
-        Column(modifier = Modifier.padding(16.dp)) {
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(padding)
+        ) {
             if (loading) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator()
@@ -475,6 +656,7 @@ fun DrinkDetailScreen(
         }
     }
 }
+
 
 @Preview(showBackground = true)
 @Composable

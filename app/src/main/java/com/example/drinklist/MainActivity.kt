@@ -84,7 +84,10 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun MainApp() {
     val screenWidthDp = LocalConfiguration.current.screenWidthDp
-    val isTabletLayout = screenWidthDp >= 600
+    val screenHeightDp = LocalConfiguration.current.screenHeightDp
+    val isTabletLayout = remember(screenWidthDp, screenHeightDp) {
+        (screenWidthDp >= 600) && (screenHeightDp >= 600)
+    }
     val selectedDrinkId = rememberSaveable { mutableStateOf<String?>(null) }
     val selectedTabIndex = rememberSaveable { mutableIntStateOf(0) } // Track selected tab
     val drinkViewModel: DrinkViewModel = viewModel(factory = DrinkViewModelFactory())
@@ -255,6 +258,7 @@ fun PhoneNumberInput(
 @Composable
 fun AppInfoScreen(isTablet: Boolean, phoneNumber: String) {
     val scrollState = rememberScrollState()
+    var confirmedNumber by remember { mutableStateOf<String?>(null) }
 
     Column(
         modifier = Modifier
@@ -293,7 +297,14 @@ fun AppInfoScreen(isTablet: Boolean, phoneNumber: String) {
                 Text("• Detailed preparation instructions")
                 Text("• Responsive design for all devices")
             }
-//            PhoneNumberInput()
+        PhoneNumberInput(
+            onPhoneNumberConfirmed = { number ->
+                confirmedNumber = number
+                // Tutaj możesz wykonać dodatkowe akcje po otrzymaniu numeru,
+                // np. nawigacja do następnego ekranu, wysłanie numeru do serwera itp.
+                println("Potwierdzony numer telefonu: $number")
+            }
+        )
 
                     Spacer(modifier = Modifier.height(16.dp))
 
@@ -542,6 +553,7 @@ fun fabSMS(onClick: () -> Unit) {
         Icon(Icons.Filled.Add, "Small floating action button.")
     }
 }
+
 
 
 

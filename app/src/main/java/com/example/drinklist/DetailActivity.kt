@@ -51,6 +51,8 @@ import android.widget.Toast
 import androidx.core.content.ContextCompat
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 
 
 class DetailActivity : ComponentActivity() {
@@ -98,7 +100,7 @@ class DetailActivity : ComponentActivity() {
                                             contentScale = ContentScale.Fit,
                                         )
                                     }
-                                    Text("Mój Dynamiczny Tytuł")
+                                    Text("@string/details")
                                 }
                             },
                             navigationIcon = {
@@ -115,6 +117,7 @@ class DetailActivity : ComponentActivity() {
                         modifier = Modifier
                             .padding(internalPadding)
                     ) {
+
                         DrinkDetailScreen(
                             sizeClass = windowSizeClass,
                             viewModel = drinkViewModel,
@@ -231,6 +234,7 @@ fun DrinkDetailScreen(
                         isRunning = isRunning.value,
                         setIsRunning = { isRunning.value = it }
                     )
+                    PhoneNumberInput({})
                 }
             }
         }
@@ -278,6 +282,7 @@ fun SmsSenderScreenWithPermissions() {
                 .fillMaxWidth()
                 .padding(top = 8.dp)
         )
+        var confirmedNumber by remember { mutableStateOf<String?>(null) }
         Button(
             onClick = {
                 // Sprawdź, czy pola tekstowe nie są puste
@@ -360,5 +365,54 @@ fun sendSmsDirectly(context: Context, phoneNumber: String, message: String) {
         // Obsługa błędów wysyłania
         Toast.makeText(context, "Błąd wysyłania SMS: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
         e.printStackTrace() // Wypisz stos wyjątku do logcat dla debugowania
+    }
+}
+
+
+@Composable
+fun PhoneNumberInput(
+    onPhoneNumberConfirmed: (String) -> Unit,
+    modifier: Modifier = Modifier // Pozwala na modyfikację wyglądu z zewnątrz
+) {
+    var phoneNumber by remember { mutableStateOf("") }
+    var phoneNumberError by remember { mutableStateOf(false) }
+
+    Column(
+        modifier = modifier
+            .padding(16.dp)
+            .fillMaxWidth(), // Wypełnia szerokość dostępnego miejsca
+        verticalArrangement = Arrangement.spacedBy(12.dp) // Odstępy między elementami
+    ) {
+        OutlinedTextField(
+            value = phoneNumber,
+            onValueChange = { newValue ->
+                phoneNumber = newValue.filter { it.isDigit() }
+                phoneNumberError = false
+            },
+            label = { Text("Numer telefonu") },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+            isError = phoneNumberError,
+            supportingText = {
+                if (phoneNumberError) {
+                    Text("Proszę wprowadzić poprawny numer telefonu (min. 9 cyfr).")
+                } else {
+                    Text("Wprowadź swój numer telefonu (np. 123456789)")
+                }
+            },
+            modifier = Modifier.fillMaxWidth()
+        )
+        Button(
+            onClick = {
+                if (phoneNumber.length >= 9) {
+                    onPhoneNumberConfirmed(phoneNumber)
+                } else {
+                    phoneNumberError = true
+                }
+            },
+            enabled = phoneNumber.length >= 9,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Potwierdź numer")
+        }
     }
 }

@@ -94,7 +94,6 @@ fun TimerFragment(
                 }
             } // Callback do aktualizacji czasu timera
         )
-        // Umożliwia ustawienie czasu (w sekundach)
 //        OutlinedTextField(
 //            value = currentTimeLeft.toString(),
 //            onValueChange = { value ->

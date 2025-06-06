@@ -65,6 +65,7 @@ import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import android.content.Context
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 
@@ -229,6 +230,8 @@ fun DrinkTabsScreen(
     val coroutineScope = rememberCoroutineScope()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val context = LocalContext.current
+    var isSearchVisible by rememberSaveable { mutableStateOf(false) }
+    var searchText by rememberSaveable { mutableStateOf("") }
 
     LaunchedEffect(pagerState) {
         snapshotFlow { pagerState.currentPage }
@@ -317,6 +320,13 @@ fun DrinkTabsScreen(
                         IconButton(onClick = { coroutineScope.launch { drawerState.open() } }) {
                             Icon(Icons.Filled.Menu, contentDescription = "Menu")
                         }
+                    },
+                    actions = {
+                        if (pagerState.currentPage != 0) { // Hide on "App Info" tab
+                            IconButton(onClick = { isSearchVisible = !isSearchVisible }) {
+                                Icon(Icons.Filled.Search, contentDescription = "Search")
+                            }
+                        }
                     }
                 )
             },
@@ -339,6 +349,17 @@ fun DrinkTabsScreen(
                         }
                     }
 
+                    if (isSearchVisible && pagerState.currentPage != 0) {
+                        OutlinedTextField(
+                            value = searchText,
+                            onValueChange = { searchText = it },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(8.dp),
+                            placeholder = { Text("Search drink by name") }
+                        )
+                    }
+
                     HorizontalPager(
                         state = pagerState,
                         modifier = Modifier
@@ -347,8 +368,24 @@ fun DrinkTabsScreen(
                     ) { page ->
                         when (page) {
                             0 -> AppInfoScreen(isTablet)
-                            1 -> DrinkListContent(drinkViewModel, onDrinkSelected)
-                            2 -> DrinkListContent(drinkViewModel, onDrinkSelected)
+                            1 -> {
+                                val drinkListState = drinkViewModel.drinkList.collectAsState()
+                                val filteredDrinks = remember(searchText, drinkListState.value) {
+                                    drinkListState.value.filter {
+                                        it.strDrink?.contains(searchText, ignoreCase = true) ?: false
+                                    }
+                                }
+                                DrinkListContent(drinkViewModel, onDrinkSelected, filteredDrinks)
+                            }
+                            2 -> {
+                                val drinkListState = drinkViewModel.drinkList.collectAsState()
+                                val filteredDrinks = remember(searchText, drinkListState.value) {
+                                    drinkListState.value.filter {
+                                        it.strDrink?.contains(searchText, ignoreCase = true) ?: false
+                                    }
+                                }
+                                DrinkListContent(drinkViewModel, onDrinkSelected,filteredDrinks)
+                            }
                         }
                     }
                 }
@@ -356,6 +393,7 @@ fun DrinkTabsScreen(
         )
     }
 }
+
 
 @Composable
 fun AppInfoScreen(isTablet: Boolean) {
@@ -411,12 +449,12 @@ fun AppInfoScreen(isTablet: Boolean) {
 @Composable
 fun DrinkListContent(
     drinkViewModel: DrinkViewModel,
-    onDrinkSelected: (String) -> Unit
+    onDrinkSelected: (String) -> Unit,
+    filteredDrinks: List<DrinkSummary>
 ) {
-    val drinks by drinkViewModel.drinkList.collectAsState()
     val loading by drinkViewModel.loading.collectAsState()
 
-    if (loading && drinks.isEmpty()) {
+    if (loading && filteredDrinks.isEmpty()) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             CircularProgressIndicator()
         }
@@ -432,7 +470,7 @@ fun DrinkListContent(
             verticalArrangement = Arrangement.spacedBy(10.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            items(items = drinks, key = { it.idDrink ?: "" }) { drink ->
+            items(items = filteredDrinks, key = { it.idDrink ?: "" }) { drink ->
                 DrinkItem(
                     drink = drink,
                     onClick = { drink.idDrink?.let(onDrinkSelected) }
@@ -441,6 +479,7 @@ fun DrinkListContent(
         }
     }
 }
+
 @Composable
 fun DrinkListScreen(
     drinkViewModel: DrinkViewModel,

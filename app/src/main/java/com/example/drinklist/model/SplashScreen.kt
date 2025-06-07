@@ -288,7 +288,7 @@ fun SplashScreen(navigateToMain: () -> Unit) {
 
             // App title with shimmer
             Text(
-                text = "DrinkBase",
+                text = "CocktailBase",
                 fontSize = 36.sp,
                 fontWeight = FontWeight.Bold,
                 color = textColor,

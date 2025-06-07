@@ -421,12 +421,11 @@ fun DrinkTabsScreen(
     }
 
     val loadingState = drinkViewModel.loading.collectAsState()
-    //val drinkListState = drinkViewModel.drinkList.collectAsState()
 
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
-                title = { Text("DrinkBase") },
+                title = { Text("CocktailBase") },
                 navigationIcon = {
                     if (openDrawer != null) {
                         IconButton(onClick = { openDrawer() }) {
@@ -650,7 +649,7 @@ fun DrinkDetailScreen(
     phoneNumber: String,
     onPhoneConfirmed: (String) -> Unit
 ) {
-    val drinkDetail by viewModel.selectedDrink.collectAsState()
+    val drinkDetailState by viewModel.selectedDrink.collectAsState()
     val loading by viewModel.loading.collectAsState()
     val context = LocalContext.current
 
@@ -661,6 +660,13 @@ fun DrinkDetailScreen(
     val timeLeft = rememberSaveable { mutableStateOf(0) }
     val isRunning = rememberSaveable { mutableStateOf(false) }
     val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
+    val requestPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted: Boolean ->
+        if (!isGranted) {
+            Toast.makeText(context, "Uprawnienie do wysyłania SMS odrzucone.", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
@@ -670,7 +676,7 @@ fun DrinkDetailScreen(
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                     ) {
-                        drinkDetail?.let { dr ->
+                        drinkDetailState?.let { dr ->
                             AsyncImage(
                                 model = ImageRequest.Builder(LocalContext.current)
                                     .data(dr.strDrinkThumb)
@@ -682,7 +688,7 @@ fun DrinkDetailScreen(
                                 contentScale = ContentScale.Fit,
                             )
                         }
-                        drinkDetail?.strDrink?.let { Text(it) }
+                        drinkDetailState?.strDrink?.let { Text(it) }
                     }
                 },
                 navigationIcon = {
@@ -704,17 +710,72 @@ fun DrinkDetailScreen(
 
         },
         floatingActionButton = {
-            if (drinkDetail != null && phoneNumber.isNotBlank()) {
+            if (drinkDetailState != null && phoneNumber.isNotBlank()) {
                 FloatingActionButton(
                     onClick = {
+                        val drinkDetail = drinkDetailState
+                        val messageToSend = if (drinkDetail == null) {
+                            ""
+                        } else {
+                            val builder = StringBuilder()
+                            builder.append("Drink: ${drinkDetail.strDrink}\n")
+                            builder.append("Składniki:\n")
+                            val ingredients = listOfNotNull(
+                                drinkDetail.strIngredient1,
+                                drinkDetail.strIngredient2,
+                                drinkDetail.strIngredient3,
+                                drinkDetail.strIngredient4,
+                                drinkDetail.strIngredient5,
+                                drinkDetail.strIngredient6,
+                                drinkDetail.strIngredient7,
+                                drinkDetail.strIngredient8,
+                                drinkDetail.strIngredient9,
+                                drinkDetail.strIngredient10,
+                                drinkDetail.strIngredient11,
+                                drinkDetail.strIngredient12,
+                                drinkDetail.strIngredient13,
+                                drinkDetail.strIngredient14,
+                                drinkDetail.strIngredient15,
+                            ).filter { it.isNotBlank() } // Usuń puste wpisy po formatowaniu
+
+                            if (ingredients.isNotEmpty()) {
+                                ingredients.forEach { builder.append("- $it\n") }
+                            } else {
+                                builder.append("Brak informacji o składnikach.\n")
+                            }
+                            builder.toString()
+                        }
+
+                        if (messageToSend.isBlank()) {
+                            Toast.makeText(context, "Wpisz numer telefonu i treść wiadomości.", Toast.LENGTH_SHORT).show()
+                            return@FloatingActionButton
+                        }
+
+                        // Sprawdź, czy uprawnienie SEND_SMS jest już przyznane
+                        when {
+                            ContextCompat.checkSelfPermission(
+                                context,
+                                Manifest.permission.SEND_SMS // Upewnij się, że to jest poprawny Manifest.permission
+                            ) == PackageManager.PERMISSION_GRANTED -> {
+                                if(deviceCanSendSms(context)) {
+                                    // Uprawnienie już przyznane, wyślij SMS-a bezpośrednio
+                                    sendSmsDirectly(context, phoneNumber, messageToSend)
+                                }
+                                else{
+                                    Toast.makeText(context, "Twoje urządzenie nie obsługuje wysyłania SMS.", Toast.LENGTH_SHORT).show()
+                                }
+
+                            }
+                            else -> {
+                                requestPermissionLauncher.launch(Manifest.permission.SEND_SMS) // Upewnij się, że to jest poprawny Manifest.permission
+                            }
+                        }
                     }
                 ) {
-                    SmsSenderScreenWithPermissions(
-                        drink = drinkDetail,
-                        phoneNumber = phoneNumber
+                    Icon(
+                        imageVector = Icons.Filled.Send, // Zmieniona ikona
+                        contentDescription = "Wyślij SMS" // Zaktualizowany opis
                     )
-                    Icon(Icons.Filled.Send, "Wyślij SMS")
-
                 }
             }
         },
@@ -730,7 +791,7 @@ fun DrinkDetailScreen(
                     CircularProgressIndicator()
                 }
             } else {
-                drinkDetail?.let { drink ->
+                drinkDetailState?.let { drink ->
                     AsyncImage(
                         model = ImageRequest.Builder(LocalContext.current)
                             .data(drink.strDrinkThumb)
@@ -900,8 +961,6 @@ fun sendSmsDirectly(context: Context, phoneNumber: String, message: String) {
         e.printStackTrace() // Wypisz stos wyjątku do logcat dla debugowania
     }
 }
-
-
 
 
 @Composable

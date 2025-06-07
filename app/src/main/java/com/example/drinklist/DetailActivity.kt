@@ -421,8 +421,13 @@ fun SmsSenderScreenWithPermissions(drink: DrinkDetail?, phoneNumber: String) {
                         context,
                         Manifest.permission.SEND_SMS // Upewnij się, że to jest poprawny Manifest.permission
                     ) == PackageManager.PERMISSION_GRANTED -> {
-                        // Uprawnienie już przyznane, wyślij SMS-a bezpośrednio
-                        sendSmsDirectly(context, phoneNumber, messageToSend)
+                        if(deviceCanSendSms(context)) {
+                            // Uprawnienie już przyznane, wyślij SMS-a bezpośrednio
+                            sendSmsDirectly(context, phoneNumber, messageToSend)
+                        }
+                        else{
+                            Toast.makeText(context, "Twój telefon nie obsługuje wysyłania SMS.", Toast.LENGTH_SHORT).show()
+                        }
 
                     }
                     else -> {
@@ -441,5 +446,5 @@ fun SmsSenderScreenWithPermissions(drink: DrinkDetail?, phoneNumber: String) {
 
 fun deviceCanSendSms(context: Context): Boolean {
     val packageManager = context.packageManager
-    return packageManager.hasSystemFeature(PackageManager.FEATURE_TELEPHONY_MESSAGING)
+    return packageManager.hasSystemFeature(PackageManager.FEATURE_TELEPHONY)
 }

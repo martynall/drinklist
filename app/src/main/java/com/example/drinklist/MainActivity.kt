@@ -140,24 +140,79 @@ fun MainApp() {
     val screenHeightDp = LocalConfiguration.current.screenHeightDp
     val screenWidthDp = LocalConfiguration.current.screenWidthDp
     val isTabletLayout = remember (screenWidthDp, screenHeightDp) {
-        (screenHeightDp >= 600) && (screenWidthDp >= 600)
+        (screenHeightDp >= 6000) && (screenWidthDp >= 6000)
     }
     val selectedDrinkId = rememberSaveable { mutableStateOf<String?>(null) }
     val selectedTabIndex = rememberSaveable { mutableIntStateOf(0) } // Track selected tab
     val drinkViewModel: DrinkViewModel = viewModel(factory = DrinkViewModelFactory())
 
-    if (isTabletLayout) {
-        TabletLayout(
-            drinkViewModel = drinkViewModel,
-            selectedDrinkId = selectedDrinkId,
-            selectedTabIndex = selectedTabIndex
-        )
-    } else {
-        PhoneLayout(
-            drinkViewModel = drinkViewModel,
-            selectedDrinkId = selectedDrinkId,
-            selectedTabIndex = selectedTabIndex
-        )
+    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    val coroutineScope = rememberCoroutineScope()
+
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        drawerContent = {
+            ModalDrawerSheet {
+                NavigationDrawerItem(
+                    label = { Text(text = "App Info") },
+                    selected = selectedTabIndex.intValue == 0,
+                    onClick = {
+                        coroutineScope.launch {
+                            selectedTabIndex.intValue = 0
+                            drawerState.close()
+                        }
+                    },
+                    modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding),
+                    icon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = "App Info") }
+                )
+                NavigationDrawerItem(
+                    label = { Text(text = "Alcoholic") },
+                    selected = selectedTabIndex.intValue == 1,
+                    onClick = {
+                        coroutineScope.launch {
+                            selectedTabIndex.intValue = 1
+                            drawerState.close()
+                        }
+                    },
+                    modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding),
+                    icon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = "Alcoholic") }
+                )
+                NavigationDrawerItem(
+                    label = { Text(text = "Non-Alcoholic") },
+                    selected = selectedTabIndex.intValue == 2,
+                    onClick = {
+                        coroutineScope.launch {
+                            selectedTabIndex.intValue = 2
+                            drawerState.close()
+                        }
+                    },
+                    modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding),
+                    icon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = "Non-Alcoholic") }
+                )
+                NavigationDrawerItem(
+                    label = { Text(text = "Close Menu") },
+                    selected = false,
+                    onClick = { coroutineScope.launch { drawerState.close() } },
+                    modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
+                )
+            }
+        }
+    ) {
+        if (isTabletLayout) {
+            TabletLayout(
+                drinkViewModel = drinkViewModel,
+                selectedDrinkId = selectedDrinkId,
+                selectedTabIndex = selectedTabIndex,
+                openDrawer = { coroutineScope.launch { drawerState.open() } }
+            )
+        } else {
+            PhoneLayout(
+                drinkViewModel = drinkViewModel,
+                selectedDrinkId = selectedDrinkId,
+                selectedTabIndex = selectedTabIndex,
+                openDrawer = { coroutineScope.launch { drawerState.open() } }
+            )
+        }
     }
 }
 
@@ -166,7 +221,8 @@ fun MainApp() {
 fun TabletLayout(
     drinkViewModel: DrinkViewModel,
     selectedDrinkId: MutableState<String?>,
-    selectedTabIndex: MutableIntState
+    selectedTabIndex: MutableIntState,
+    openDrawer: () -> Unit
 ) {
     val context = LocalContext.current
 
@@ -178,7 +234,8 @@ fun TabletLayout(
                     drinkViewModel = drinkViewModel,
                     onDrinkSelected = { selectedDrinkId.value = it },
                     selectedTabIndex = selectedTabIndex,
-                    isTablet = true
+                    isTablet = true,
+                    openDrawer = openDrawer
                 )
             } else {
                 // Split view when drink is selected
@@ -187,7 +244,8 @@ fun TabletLayout(
                         drinkViewModel = drinkViewModel,
                         onDrinkSelected = { selectedDrinkId.value = it },
                         selectedTabIndex = selectedTabIndex,
-                        isTablet = true
+                        isTablet = true,
+                        openDrawer = openDrawer
                     )
                 }
                 Box(Modifier.weight(0.5f)) {
@@ -196,7 +254,8 @@ fun TabletLayout(
                             viewModel = drinkViewModel,
                             drinkId = it,
                             onBack = { selectedDrinkId.value = null },
-                            onSendSms = { ingredients -> sendSms(context, ingredients) } // Dodaj obsługę wysyłania SMS
+                            onSendSms = { ingredients -> sendSms(context, ingredients) },
+                            onMenuClick = openDrawer
                         )
                     }
                 }
@@ -210,7 +269,8 @@ fun TabletLayout(
 fun PhoneLayout(
     drinkViewModel: DrinkViewModel,
     selectedDrinkId: MutableState<String?>,
-    selectedTabIndex: MutableIntState
+    selectedTabIndex: MutableIntState,
+    openDrawer: () -> Unit
 ) {
     var currentScreen by rememberSaveable { mutableStateOf("tabs") }
     val context = LocalContext.current
@@ -225,7 +285,8 @@ fun PhoneLayout(
                         selectedDrinkId.value = it
                         currentScreen = "detail"
                     },
-                    selectedTabIndex = selectedTabIndex
+                    selectedTabIndex = selectedTabIndex,
+                    openDrawer = openDrawer
                 )
             } else {
                 selectedDrinkId.value?.let {
@@ -233,7 +294,8 @@ fun PhoneLayout(
                         viewModel = drinkViewModel,
                         drinkId = it,
                         onBack = { currentScreen = "tabs" },
-                        onSendSms = { ingredients -> sendSms(context, ingredients) } // Dodaj obsługę wysyłania SMS
+                        onSendSms = { ingredients -> sendSms(context, ingredients) },
+                        onMenuClick = openDrawer
                     )
                 }
             }
@@ -247,7 +309,8 @@ fun DrinkTabsScreen(
     drinkViewModel: DrinkViewModel,
     onDrinkSelected: (String) -> Unit,
     selectedTabIndex: MutableIntState,
-    isTablet: Boolean = false
+    isTablet: Boolean = false,
+    openDrawer: (() -> Unit)? = null
 ) {
     val tabs = listOf("App Info", "Alcoholic", "Non-Alcoholic")
     val pagerState = rememberPagerState(
@@ -255,7 +318,6 @@ fun DrinkTabsScreen(
         pageCount = { tabs.size }
     )
     val coroutineScope = rememberCoroutineScope()
-    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val context = LocalContext.current
     var isSearchVisible by rememberSaveable { mutableStateOf(false) }
     var searchText by rememberSaveable { mutableStateOf("") }
@@ -287,138 +349,87 @@ fun DrinkTabsScreen(
         }
     }
 
-    ModalNavigationDrawer(
-        drawerState = drawerState,
-        drawerContent = {
-            ModalDrawerSheet {
-                NavigationDrawerItem(
-                    label = { Text(text = "App Info") },
-                    selected = false,
-                    onClick = {
-                        coroutineScope.launch {
-                            pagerState.animateScrollToPage(0)
-                            selectedTabIndex.intValue = 0
-                            drawerState.close()
-                        }
-                    },
-                    modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding),
-                    icon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = "App Info") }
-                )
-                NavigationDrawerItem(
-                    label = { Text(text = "Alcoholic") },
-                    selected = false,
-                    onClick = {
-                        coroutineScope.launch {
-                            pagerState.animateScrollToPage(1)
-                            selectedTabIndex.intValue = 1
-                            drawerState.close()
-                        }
-                    },
-                    modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding),
-                    icon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = "Alcoholic") }
-                )
-                NavigationDrawerItem(
-                    label = { Text(text = "Non-Alcoholic") },
-                    selected = false,
-                    onClick = {
-                        coroutineScope.launch {
-                            pagerState.animateScrollToPage(2)
-                            selectedTabIndex.intValue = 2
-                            drawerState.close()
-                        }
-                    },
-                    modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding),
-                    icon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = "Non-Alcoholic") }
-                )
-                NavigationDrawerItem(
-                    label = { Text(text = "Close Menu") },
-                    selected = false,
-                    onClick = { coroutineScope.launch { drawerState.close() } },
-                    modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
-                )
-            }
-        }
-    ) {
-        Scaffold(
-            topBar = {
-                CenterAlignedTopAppBar(
-                    title = { Text("DrinkBase") },
-                    navigationIcon = {
-                        IconButton(onClick = { coroutineScope.launch { drawerState.open() } }) {
+    Scaffold(
+        topBar = {
+            CenterAlignedTopAppBar(
+                title = { Text("DrinkBase") },
+                navigationIcon = {
+                    if (openDrawer != null) {
+                        IconButton(onClick = { openDrawer() }) {
                             Icon(Icons.Filled.Menu, contentDescription = "Menu")
                         }
-                    },
-                    actions = {
-                        if (pagerState.currentPage != 0) { // Hide on "App Info" tab
-                            IconButton(onClick = { isSearchVisible = !isSearchVisible }) {
-                                Icon(Icons.Filled.Search, contentDescription = "Search")
-                            }
+                    }
+                },
+                actions = {
+                    if (pagerState.currentPage != 0) { // Hide on "App Info" tab
+                        IconButton(onClick = { isSearchVisible = !isSearchVisible }) {
+                            Icon(Icons.Filled.Search, contentDescription = "Search")
                         }
                     }
-                )
-            },
-            content = { padding ->
-                Column(modifier = Modifier.padding(padding)) {
-                    TabRow(
-                        selectedTabIndex = pagerState.currentPage,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        tabs.forEachIndexed { index, title ->
-                            Tab(
-                                selected = pagerState.currentPage == index,
-                                onClick = {
-                                    coroutineScope.launch {
-                                        pagerState.animateScrollToPage(index)
-                                    }
-                                },
-                                text = { Text(text = title) }
-                            )
-                        }
-                    }
-
-                    if (isSearchVisible && pagerState.currentPage != 0) {
-                        OutlinedTextField(
-                            value = searchText,
-                            onValueChange = { searchText = it },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(8.dp),
-                            placeholder = { Text("Search drink by name") }
+                }
+            )
+        },
+        content = { padding ->
+            Column(modifier = Modifier.padding(padding)) {
+                TabRow(
+                    selectedTabIndex = pagerState.currentPage,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    tabs.forEachIndexed { index, title ->
+                        Tab(
+                            selected = pagerState.currentPage == index,
+                            onClick = {
+                                coroutineScope.launch {
+                                    pagerState.animateScrollToPage(index)
+                                }
+                            },
+                            text = { Text(text = title) }
                         )
                     }
+                }
 
-                    HorizontalPager(
-                        state = pagerState,
+                if (isSearchVisible && pagerState.currentPage != 0) {
+                    OutlinedTextField(
+                        value = searchText,
+                        onValueChange = { searchText = it },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .weight(1f)
-                    ) { page ->
-                        when (page) {
-                            0 -> AppInfoScreen(isTablet)
-                            1 -> {
-                                val drinkListState = drinkViewModel.drinkList.collectAsState()
-                                val filteredDrinks = remember(searchText, drinkListState.value) {
-                                    drinkListState.value.filter {
-                                        it.strDrink?.contains(searchText, ignoreCase = true) ?: false
-                                    }
+                            .padding(8.dp),
+                        placeholder = { Text("Search drink by name") }
+                    )
+                }
+
+                HorizontalPager(
+                    state = pagerState,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                ) { page ->
+                    when (page) {
+                        0 -> AppInfoScreen(isTablet)
+                        1 -> {
+                            val drinkListState = drinkViewModel.drinkList.collectAsState()
+                            val filteredDrinks = remember(searchText, drinkListState.value) {
+                                drinkListState.value.filter {
+                                    it.strDrink?.contains(searchText, ignoreCase = true) ?: false
                                 }
-                                DrinkListContent(drinkViewModel, onDrinkSelected, filteredDrinks)
                             }
-                            2 -> {
-                                val drinkListState = drinkViewModel.drinkList.collectAsState()
-                                val filteredDrinks = remember(searchText, drinkListState.value) {
-                                    drinkListState.value.filter {
-                                        it.strDrink?.contains(searchText, ignoreCase = true) ?: false
-                                    }
+                            DrinkListContent(drinkViewModel, onDrinkSelected, filteredDrinks)
+                        }
+                        2 -> {
+                            val drinkListState = drinkViewModel.drinkList.collectAsState()
+                            val filteredDrinks = remember(searchText, drinkListState.value) {
+                                drinkListState.value.filter {
+                                    it.strDrink?.contains(searchText, ignoreCase = true) ?: false
                                 }
-                                DrinkListContent(drinkViewModel, onDrinkSelected,filteredDrinks)
                             }
+                            DrinkListContent(drinkViewModel, onDrinkSelected,filteredDrinks)
                         }
                     }
                 }
             }
-        )
-    }
+        }
+    )
 }
 
 
@@ -600,7 +611,8 @@ fun DrinkDetailScreen(
     viewModel: DrinkViewModel,
     drinkId: String,
     onBack: (() -> Unit)? = null,
-    onSendSms: ((List<String>) -> Unit)? = null
+    onSendSms: ((List<String>) -> Unit)? = null,
+    onMenuClick: (() -> Unit)? = null // Add this parameter
 ) {
     val drinkDetail by viewModel.selectedDrink.collectAsState()
     val loading by viewModel.loading.collectAsState()
@@ -617,7 +629,7 @@ fun DrinkDetailScreen(
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            CenterAlignedTopAppBar( // Użyj odpowiedniego TopAppBar (Large, Medium, CenterAligned, Small)
+            CenterAlignedTopAppBar(
                 title = {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -630,7 +642,7 @@ fun DrinkDetailScreen(
                                     .build(),
                                 contentDescription = null,
                                 modifier = Modifier
-                                    .fillMaxHeight(), // Ustaw wysokość obrazka
+                                    .fillMaxHeight(),
                                 contentScale = ContentScale.Fit,
                             )
                         }
@@ -638,9 +650,16 @@ fun DrinkDetailScreen(
                     }
                 },
                 navigationIcon = {
-                    if (onBack != null) {
-                        IconButton(onClick = { onBack() }) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    Row {
+                        if (onMenuClick != null) {
+                            IconButton(onClick = { onMenuClick() }) {
+                                Icon(Icons.Filled.Menu, contentDescription = "Menu")
+                            }
+                        }
+                        if (onBack != null) {
+                            IconButton(onClick = { onBack() }) {
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                            }
                         }
                     }
                 },

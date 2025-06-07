@@ -324,15 +324,17 @@ fun TabletLayout(
         Row(Modifier.fillMaxSize().padding(padding)) {
             if (selectedDrinkId.value == null) {
                 // Full screen tabs when no drink is selected
-                DrinkTabsScreen(
-                    drinkViewModel = drinkViewModel,
-                    onDrinkSelected = { selectedDrinkId.value = it },
-                    selectedTabIndex = selectedTabIndex,
-                    isTablet = true,
-                    openDrawer = openDrawer,
-                    refreshKey = refreshKey, // Pass the refresh key
-                    onTabSelected = { index -> updateTabIndex(index) } // Pass the refresh key
-                )
+                Box(Modifier.fillMaxSize()) {
+                    DrinkTabsScreen(
+                        drinkViewModel = drinkViewModel,
+                        onDrinkSelected = { selectedDrinkId.value = it },
+                        selectedTabIndex = selectedTabIndex,
+                        isTablet = true,
+                        openDrawer = openDrawer,
+                        refreshKey = refreshKey, // Pass the refresh key
+                        onTabSelected = { index -> updateTabIndex(index) } // Pass the refresh key
+                    )
+                }
             } else {
                 // Split view when drink is selected
                 Box(Modifier.weight(0.5f)) {

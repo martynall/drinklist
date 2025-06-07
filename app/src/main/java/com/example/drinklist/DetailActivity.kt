@@ -277,6 +277,11 @@ fun checkIfSmsSupported(): Boolean {
 
 
 fun sendSmsDirectly(context: Context, phoneNumber: String, message: String) {
+    if (!deviceCanSendSms(context)) {
+        Toast.makeText(context, "To urządzenie nie obsługuje wysyłania wiadomości SMS.", Toast.LENGTH_LONG).show()
+        return
+    }
+
     if (ContextCompat.checkSelfPermission(context, Manifest.permission.SEND_SMS) != PackageManager.PERMISSION_GRANTED) {
         Toast.makeText(context, "Brak uprawnienia do wysyłania SMS. Proszę przyznaj uprawnienie w ustawieniach aplikacji.", Toast.LENGTH_LONG).show()
         return
@@ -453,4 +458,9 @@ fun SmsSenderScreenWithPermissions(drink: DrinkDetail?, phoneNumber: String) {
         )
         }
     }
+}
+
+fun deviceCanSendSms(context: Context): Boolean {
+    val packageManager = context.packageManager
+    return packageManager.hasSystemFeature(PackageManager.FEATURE_TELEPHONY_MESSAGING)
 }

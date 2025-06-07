@@ -281,6 +281,9 @@ fun sendSmsDirectly(context: Context, phoneNumber: String, message: String) {
         Toast.makeText(context, "To urządzenie nie obsługuje wysyłania wiadomości SMS.", Toast.LENGTH_LONG).show()
         return
     }
+    else{
+        Toast.makeText(context, "To urządzenie obsługuje wysyłanie wiadomości SMS.", Toast.LENGTH_LONG).show()
+    }
 
     if (ContextCompat.checkSelfPermission(context, Manifest.permission.SEND_SMS) != PackageManager.PERMISSION_GRANTED) {
         Toast.makeText(context, "Brak uprawnienia do wysyłania SMS. Proszę przyznaj uprawnienie w ustawieniach aplikacji.", Toast.LENGTH_LONG).show()

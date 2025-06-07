@@ -89,13 +89,12 @@ class DetailActivity : ComponentActivity() {
                                 onClick = {
                                 }
                             ) {
-                                if(activityPhoneNumber == "731177499") {
-                                    SmsSenderScreenWithPermissions(
-                                        drink = drink,
-                                        phoneNumber = activityPhoneNumber
-                                    )
-                                    Icon(Icons.Filled.Send, "Wyślij SMS")
-                                }
+                                SmsSenderScreenWithPermissions(
+                                    drink = drink,
+                                    phoneNumber = activityPhoneNumber
+                                )
+                                Icon(Icons.Filled.Send, "Wyślij SMS")
+
                             }
                         }
                     },
@@ -135,7 +134,6 @@ class DetailActivity : ComponentActivity() {
                         modifier = Modifier
                             .padding(internalPadding)
                     ) {
-
                         DrinkDetailScreen(
                             sizeClass = windowSizeClass,
                             viewModel = drinkViewModel,
@@ -277,13 +275,6 @@ fun checkIfSmsSupported(): Boolean {
 
 
 fun sendSmsDirectly(context: Context, phoneNumber: String, message: String) {
-    if (!deviceCanSendSms(context)) {
-        Toast.makeText(context, "To urządzenie nie obsługuje wysyłania wiadomości SMS.", Toast.LENGTH_LONG).show()
-        return
-    }
-    else{
-        Toast.makeText(context, "To urządzenie obsługuje wysyłanie wiadomości SMS.", Toast.LENGTH_LONG).show()
-    }
 
     if (ContextCompat.checkSelfPermission(context, Manifest.permission.SEND_SMS) != PackageManager.PERMISSION_GRANTED) {
         Toast.makeText(context, "Brak uprawnienia do wysyłania SMS. Proszę przyznaj uprawnienie w ustawieniach aplikacji.", Toast.LENGTH_LONG).show()
@@ -299,10 +290,7 @@ fun sendSmsDirectly(context: Context, phoneNumber: String, message: String) {
         return
     }
 
-    // 3. Spróbuj wysłać SMS-a
     try {
-        // Pobierz instancję SmsManager
-        // Używamy nowszego API dla Androida S (API 31) i wyżej, inaczej używamy getDefault()
         val smsManager = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
             context.getSystemService(SmsManager::class.java)
         } else {
@@ -310,15 +298,11 @@ fun sendSmsDirectly(context: Context, phoneNumber: String, message: String) {
             SmsManager.getDefault()
         }
 
-        // Wysyłanie wiadomości tekstowej
-        // Ostatnie dwa parametry (sentIntent, deliveryIntent) mogą być użyte do otrzymywania powiadomień
-        // o statusie wysyłki i dostarczenia SMS-a, ale dla prostoty w tym przykładzie są null.
         val parts = smsManager.divideMessage(message)
         smsManager.sendMultipartTextMessage(phoneNumber, null, parts, null, null)
 
         Toast.makeText(context, "wiadomość: $message", Toast.LENGTH_SHORT).show()
     } catch (e: Exception) {
-        // Obsługa błędów wysyłania
         Toast.makeText(context, "Błąd wysyłania SMS: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
         e.printStackTrace() // Wypisz stos wyjątku do logcat dla debugowania
     }
@@ -376,10 +360,8 @@ fun PhoneNumberInput(
 
 @Composable
 fun SmsSenderScreenWithPermissions(drink: DrinkDetail?, phoneNumber: String) {
-    val context = LocalContext.current // Uzyskaj kontekst
+    val context = LocalContext.current
 
-
-    // Launcher do obsługi prośby o uprawnienia
     val requestPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted: Boolean ->
@@ -387,19 +369,13 @@ fun SmsSenderScreenWithPermissions(drink: DrinkDetail?, phoneNumber: String) {
             Toast.makeText(context, "Uprawnienie do wysyłania SMS odrzucone.", Toast.LENGTH_SHORT).show()
         }
     }
-
-    val messageToSend by remember(drink) { // Oblicz ponownie, gdy `drink` się zmieni
+    val messageToSend by remember(drink) {
         derivedStateOf {
             if (drink == null) {
-                "" // Pusta wiadomość, jeśli drink jest null
+                ""
             } else {
-                // Budowanie wiadomości krok po kroku
                 val builder = StringBuilder()
-
-                // 1. Nazwa drinka
                 builder.append("Drink: ${drink.strDrink}\n")
-
-//                 2. Składniki i miary
                 builder.append("Składniki:\n")
                 val ingredients = listOfNotNull(
                     drink.strIngredient1,
@@ -447,9 +423,9 @@ fun SmsSenderScreenWithPermissions(drink: DrinkDetail?, phoneNumber: String) {
                     ) == PackageManager.PERMISSION_GRANTED -> {
                         // Uprawnienie już przyznane, wyślij SMS-a bezpośrednio
                         sendSmsDirectly(context, phoneNumber, messageToSend)
+
                     }
                     else -> {
-                        // Poproś o uprawnienie za pomocą launchera
                         requestPermissionLauncher.launch(Manifest.permission.SEND_SMS) // Upewnij się, że to jest poprawny Manifest.permission
                     }
                 }

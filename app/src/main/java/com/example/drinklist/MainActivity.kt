@@ -1,6 +1,9 @@
 package com.example.drinklist
 
 import android.annotation.SuppressLint
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.platform.LocalFocusManager
 import android.telephony.SmsManager
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
@@ -783,7 +786,7 @@ fun DrinkDetailScreen(
                             isRunning = isRunning.value,
                             setIsRunning = { isRunning.value = it }
                         )
-                        PhoneNumberInput(phoneNumber = phoneNumber, onPhoneNumberConfirmed = {number -> onPhoneConfirmed(number)})
+                        PhoneNumberInput(initialPhoneNumber = phoneNumber, onPhoneNumberConfirmed = {number -> onPhoneConfirmed(number)})
                     }
                 }
             }
@@ -794,27 +797,33 @@ fun DrinkDetailScreen(
 
 @Composable
 fun PhoneNumberInput(
-    phoneNumber: String,
+    initialPhoneNumber: String, // Zmieniono nazwę dla jasności, że to wartość początkowa
     onPhoneNumberConfirmed: (String) -> Unit,
-    modifier: Modifier = Modifier // Pozwala na modyfikację wyglądu z zewnątrz
+    modifier: Modifier = Modifier
 ) {
-    var phoneNumber by remember { mutableStateOf(phoneNumber) }
+    // Użyj initialPhoneNumber jako klucza dla remember, aby zresetować stan,
+    // jeśli wartość początkowa zmieni się z zewnątrz.
+    var currentPhoneNumber by remember(initialPhoneNumber) { mutableStateOf(initialPhoneNumber) }
     var phoneNumberError by remember { mutableStateOf(false) }
+    val focusManager = LocalFocusManager.current
 
     Column(
         modifier = modifier
             .padding(16.dp)
-            .fillMaxWidth(), // Wypełnia szerokość dostępnego miejsca
-        verticalArrangement = Arrangement.spacedBy(12.dp) // Odstępy między elementami
+            .fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         OutlinedTextField(
-            value = phoneNumber,
+            value = currentPhoneNumber,
             onValueChange = { newValue ->
-                phoneNumber = newValue.filter { it.isDigit() }
-                phoneNumberError = false
+                currentPhoneNumber = newValue.filter { it.isDigit() }
+                phoneNumberError = false // Resetuj błąd przy każdej zmianie
             },
             label = { Text("Numer telefonu") },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Phone,
+                imeAction = ImeAction.Done // <--- DODAJ TĘ LINIJKĘ
+            ),
             isError = phoneNumberError,
             supportingText = {
                 if (phoneNumberError) {
@@ -823,24 +832,36 @@ fun PhoneNumberInput(
                     Text("Wprowadź swój numer telefonu (np. 123456789)")
                 }
             },
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            keyboardActions = KeyboardActions(
+                onDone = {
+                    // Opcjonalnie: najpierw zwaliduj i potwierdź, jeśli użytkownik kliknął "Done"
+                    // zamiast przycisku, jeśli to pożądane zachowanie.
+                    // if (currentPhoneNumber.length >= 9) {
+                    //     onPhoneNumberConfirmed(currentPhoneNumber)
+                    // } else {
+                    //     phoneNumberError = true
+                    // }
+                    focusManager.clearFocus() // Schowaj klawiaturę
+                }
+            )
         )
         Button(
             onClick = {
-                if (phoneNumber.length >= 9) {
-                    onPhoneNumberConfirmed(phoneNumber)
+                if (currentPhoneNumber.length >= 9) {
+                    onPhoneNumberConfirmed(currentPhoneNumber)
+                    focusManager.clearFocus() // Opcjonalnie: schowaj klawiaturę także po kliknięciu przycisku
                 } else {
                     phoneNumberError = true
                 }
             },
-            enabled = phoneNumber.length >= 9,
+            enabled = currentPhoneNumber.length >= 9,
             modifier = Modifier.fillMaxWidth()
         ) {
             Text("Potwierdź numer")
         }
     }
 }
-
 
 
 

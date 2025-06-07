@@ -949,7 +949,7 @@ fun SmsSenderScreenWithPermissions(drink: DrinkDetail?, phoneNumber: String) {
                             sendSmsDirectly(context, phoneNumber, messageToSend)
                         }
                         else{
-                            Toast.makeText(context, "Twój telefon nie obsługuje wysyłania SMS.", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "Twoje urządzenie nie obsługuje wysyłania SMS.", Toast.LENGTH_SHORT).show()
                         }
 
                     }

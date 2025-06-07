@@ -154,7 +154,7 @@ fun MainApp() {
     val screenHeightDp = LocalConfiguration.current.screenHeightDp
     val screenWidthDp = LocalConfiguration.current.screenWidthDp
     val isTabletLayout = remember (screenWidthDp, screenHeightDp) {
-        (screenHeightDp >= 6000) && (screenWidthDp >= 6000)
+        (screenHeightDp >= 600) && (screenWidthDp >= 600)
     }
     val selectedDrinkId = rememberSaveable { mutableStateOf<String?>(null) }
     val selectedTabIndex = rememberSaveable { mutableIntStateOf(0) } // Track selected tab

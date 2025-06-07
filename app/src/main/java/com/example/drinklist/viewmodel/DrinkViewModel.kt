@@ -21,46 +21,47 @@ class DrinkViewModel : ViewModel() {
     private val _loading = MutableStateFlow(false)
     val loading: StateFlow<Boolean> = _loading
 
-    private var currentFilter: String? = null
     private var hasFetchedInitialData = false
 
 
-    private val _alcoholicDrinks = MutableStateFlow<List<DrinkSummary>>(emptyList())
-    private val _nonAlcoholicDrinks = MutableStateFlow<List<DrinkSummary>>(emptyList())
+    val _alcoholicDrinks = MutableStateFlow<List<DrinkSummary>>(emptyList())
+    val _nonAlcoholicDrinks = MutableStateFlow<List<DrinkSummary>>(emptyList())
 
-    val drinkList: StateFlow<List<DrinkSummary>> get() = when(currentFilter) {
-        "Alcoholic" -> _alcoholicDrinks
-        "Non_Alcoholic" -> _nonAlcoholicDrinks
-        else -> _alcoholicDrinks // Default to alcoholic
-    }
+    val alcoholicDrinks: StateFlow<List<DrinkSummary>> get() = _alcoholicDrinks
+    val nonAlcoholicDrinks: StateFlow<List<DrinkSummary>> get() = _nonAlcoholicDrinks
 
+//    val drinkList: StateFlow<List<DrinkSummary>> get() = when(currentFilter) {
+//        "Alcoholic" -> _alcoholicDrinks
+//        "Non_Alcoholic" -> _nonAlcoholicDrinks
+//        else -> _alcoholicDrinks // Default to alcoholic
+//    }
+//
+//
+//    fun fetchDrinksIfNeeded(filter: String? = null) {
+//        //if (currentFilter != filter) {
+//            currentFilter = filter
+//            fetchDrinks(filter)
+//        //}
+//    }
 
-    fun fetchDrinksIfNeeded(filter: String? = null) {
-        if (currentFilter != filter) {
-            currentFilter = filter
-            fetchDrinks(filter)
-        }
-    }
-
-    private fun fetchDrinks(filter: String? = null) {
+    fun fetchDrinks(filter: String? = null) {
         viewModelScope.launch {
             _loading.value = true
             try {
-                val response = when (filter) {
+                when (filter) {
                     "Alcoholic" -> {
-                        RetrofitClient.apiService.getDrinksByAlcoholic("Alcoholic").also {
-                            if (it.isSuccessful) _alcoholicDrinks.value = it.body()?.drinks ?: emptyList()
-                        }
+                        if (_alcoholicDrinks.value.isNotEmpty()) return@launch
+                        val response = RetrofitClient.apiService.getDrinksByAlcoholic("Alcoholic")
+                        if (response.isSuccessful) _alcoholicDrinks.value = response.body()?.drinks ?: emptyList()
                     }
                     "Non_Alcoholic" -> {
-                        RetrofitClient.apiService.getDrinksByAlcoholic("Non_Alcoholic").also {
-                            if (it.isSuccessful) _nonAlcoholicDrinks.value = it.body()?.drinks ?: emptyList()
-                        }
+                        if (_nonAlcoholicDrinks.value.isNotEmpty()) return@launch
+                        val response = RetrofitClient.apiService.getDrinksByAlcoholic("Non_Alcoholic")
+                        if (response.isSuccessful) _nonAlcoholicDrinks.value = response.body()?.drinks ?: emptyList()
                     }
-                    else -> null
                 }
             } catch (e: Exception) {
-                // Handle error
+                // obsługa błędów
             } finally {
                 _loading.value = false
             }

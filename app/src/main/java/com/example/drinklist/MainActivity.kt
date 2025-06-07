@@ -140,7 +140,7 @@ fun MainApp() {
     val screenHeightDp = LocalConfiguration.current.screenHeightDp
     val screenWidthDp = LocalConfiguration.current.screenWidthDp
     val isTabletLayout = remember (screenWidthDp, screenHeightDp) {
-        (screenHeightDp >= 600) && (screenWidthDp >= 600)
+        (screenHeightDp >= 6000) && (screenWidthDp >= 6000)
     }
     val selectedDrinkId = rememberSaveable { mutableStateOf<String?>(null) }
     val selectedTabIndex = rememberSaveable { mutableIntStateOf(0) } // Track selected tab
@@ -148,6 +148,9 @@ fun MainApp() {
 
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val coroutineScope = rememberCoroutineScope()
+
+    // Add a key to trigger refresh when selectedTabIndex changes
+    val refreshKey = remember { mutableStateOf(0) }
 
     ModalNavigationDrawer(
         drawerState = drawerState,
@@ -159,6 +162,8 @@ fun MainApp() {
                     onClick = {
                         coroutineScope.launch {
                             selectedTabIndex.intValue = 0
+                            selectedDrinkId.value = null // Reset selected drink
+                            refreshKey.value++
                             drawerState.close()
                         }
                     },
@@ -171,6 +176,8 @@ fun MainApp() {
                     onClick = {
                         coroutineScope.launch {
                             selectedTabIndex.intValue = 1
+                            selectedDrinkId.value = null // Reset selected drink
+                            refreshKey.value++
                             drawerState.close()
                         }
                     },
@@ -183,6 +190,8 @@ fun MainApp() {
                     onClick = {
                         coroutineScope.launch {
                             selectedTabIndex.intValue = 2
+                            selectedDrinkId.value = null // Reset selected drink
+                            refreshKey.value++
                             drawerState.close()
                         }
                     },
@@ -203,15 +212,69 @@ fun MainApp() {
                 drinkViewModel = drinkViewModel,
                 selectedDrinkId = selectedDrinkId,
                 selectedTabIndex = selectedTabIndex,
-                openDrawer = { coroutineScope.launch { drawerState.open() } }
+                openDrawer = { coroutineScope.launch { drawerState.open() } },
+                refreshKey = refreshKey, // Pass the refresh key
+                updateTabIndex = { index -> selectedTabIndex.intValue = index } // Pass the lambda
             )
         } else {
             PhoneLayout(
                 drinkViewModel = drinkViewModel,
                 selectedDrinkId = selectedDrinkId,
                 selectedTabIndex = selectedTabIndex,
-                openDrawer = { coroutineScope.launch { drawerState.open() } }
+                openDrawer = { coroutineScope.launch { drawerState.open() } },
+                refreshKey = refreshKey, // Pass the refresh key
+                updateTabIndex = { index -> selectedTabIndex.intValue = index } // Pass the lambda
             )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun PhoneLayout(
+    drinkViewModel: DrinkViewModel,
+    selectedDrinkId: MutableState<String?>,
+    selectedTabIndex: MutableIntState,
+    openDrawer: () -> Unit,
+    refreshKey: MutableState<Int>, // Receive the refresh key
+    updateTabIndex: (Int) -> Unit
+) {
+    var currentScreen by rememberSaveable { mutableStateOf("tabs") }
+    val context = LocalContext.current
+
+    Scaffold { padding ->
+        Box(modifier = Modifier.padding(padding)) {
+            when (currentScreen) {
+                "tabs" -> {
+                    DrinkTabsScreen(
+                        drinkViewModel = drinkViewModel,
+                        onDrinkSelected = {
+                            selectedDrinkId.value = it
+                            currentScreen = "detail"
+                        },
+                        selectedTabIndex = selectedTabIndex,
+                        openDrawer = openDrawer,
+                        onTabSelected = {
+                            currentScreen = "tabs"
+                            selectedDrinkId.value = null
+                        },
+                        refreshKey = refreshKey // Pass the refresh key
+                    )
+                }
+                "detail" -> {
+                    selectedDrinkId.value?.let {
+                        DrinkDetailScreen(
+                            viewModel = drinkViewModel,
+                            drinkId = it,
+                            onBack = { currentScreen = "tabs" },
+                            onSendSms = { ingredients -> sendSms(context, ingredients) },
+                            onMenuClick = openDrawer
+                        )
+                    } ?: run {
+                        currentScreen = "tabs"
+                    }
+                }
+            }
         }
     }
 }
@@ -222,7 +285,9 @@ fun TabletLayout(
     drinkViewModel: DrinkViewModel,
     selectedDrinkId: MutableState<String?>,
     selectedTabIndex: MutableIntState,
-    openDrawer: () -> Unit
+    openDrawer: () -> Unit,
+    refreshKey: MutableState<Int>, // Receive the refresh key
+    updateTabIndex: (Int) -> Unit
 ) {
     val context = LocalContext.current
 
@@ -235,7 +300,9 @@ fun TabletLayout(
                     onDrinkSelected = { selectedDrinkId.value = it },
                     selectedTabIndex = selectedTabIndex,
                     isTablet = true,
-                    openDrawer = openDrawer
+                    openDrawer = openDrawer,
+                    refreshKey = refreshKey, // Pass the refresh key
+                    onTabSelected = { index -> updateTabIndex(index) } // Pass the refresh key
                 )
             } else {
                 // Split view when drink is selected
@@ -245,7 +312,9 @@ fun TabletLayout(
                         onDrinkSelected = { selectedDrinkId.value = it },
                         selectedTabIndex = selectedTabIndex,
                         isTablet = true,
-                        openDrawer = openDrawer
+                        openDrawer = openDrawer,
+                        refreshKey = refreshKey, // Pass the refresh key
+                        onTabSelected = { index -> updateTabIndex(index) }
                     )
                 }
                 Box(Modifier.weight(0.5f)) {
@@ -254,8 +323,7 @@ fun TabletLayout(
                             viewModel = drinkViewModel,
                             drinkId = it,
                             onBack = { selectedDrinkId.value = null },
-                            onSendSms = { ingredients -> sendSms(context, ingredients) },
-                            onMenuClick = openDrawer
+                            onSendSms = { ingredients -> sendSms(context, ingredients) }
                         )
                     }
                 }
@@ -264,44 +332,6 @@ fun TabletLayout(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun PhoneLayout(
-    drinkViewModel: DrinkViewModel,
-    selectedDrinkId: MutableState<String?>,
-    selectedTabIndex: MutableIntState,
-    openDrawer: () -> Unit
-) {
-    var currentScreen by rememberSaveable { mutableStateOf("tabs") }
-    val context = LocalContext.current
-
-    Scaffold(
-    ) { padding ->
-        Box(modifier = Modifier.padding(padding)) {
-            if (currentScreen == "tabs") {
-                DrinkTabsScreen(
-                    drinkViewModel = drinkViewModel,
-                    onDrinkSelected = {
-                        selectedDrinkId.value = it
-                        currentScreen = "detail"
-                    },
-                    selectedTabIndex = selectedTabIndex,
-                    openDrawer = openDrawer
-                )
-            } else {
-                selectedDrinkId.value?.let {
-                    DrinkDetailScreen(
-                        viewModel = drinkViewModel,
-                        drinkId = it,
-                        onBack = { currentScreen = "tabs" },
-                        onSendSms = { ingredients -> sendSms(context, ingredients) },
-                        onMenuClick = openDrawer
-                    )
-                }
-            }
-        }
-    }
-}
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -310,7 +340,9 @@ fun DrinkTabsScreen(
     onDrinkSelected: (String) -> Unit,
     selectedTabIndex: MutableIntState,
     isTablet: Boolean = false,
-    openDrawer: (() -> Unit)? = null
+    openDrawer: (() -> Unit)? = null,
+    onTabSelected: ((Int) -> Unit)? = null, // Add this lambda
+    refreshKey: MutableState<Int> // Receive the refresh key
 ) {
     val tabs = listOf("App Info", "Alcoholic", "Non-Alcoholic")
     val pagerState = rememberPagerState(
@@ -321,6 +353,23 @@ fun DrinkTabsScreen(
     val context = LocalContext.current
     var isSearchVisible by rememberSaveable { mutableStateOf(false) }
     var searchText by rememberSaveable { mutableStateOf("") }
+    val alcoholicDrinks = drinkViewModel.alcoholicDrinks.collectAsState()
+    val nonAlcoholicDrinks = drinkViewModel.nonAlcoholicDrinks.collectAsState()
+    val loading = drinkViewModel.loading.collectAsState()
+    val filteredDrinks = remember(searchText, pagerState.currentPage, alcoholicDrinks.value, nonAlcoholicDrinks.value) {
+        when (pagerState.currentPage) {
+            1 -> alcoholicDrinks.value.filter { it.strDrink?.contains(searchText, ignoreCase = true) ?: false }
+            2 -> nonAlcoholicDrinks.value.filter { it.strDrink?.contains(searchText, ignoreCase = true) ?: false }
+            else -> emptyList()
+        }
+    }
+    DrinkListContent(drinkViewModel, onDrinkSelected, filteredDrinks)
+
+    LaunchedEffect(selectedTabIndex.intValue) {
+        if (selectedTabIndex.intValue != pagerState.currentPage) {
+            pagerState.animateScrollToPage(selectedTabIndex.intValue)
+        }
+    }
 
     LaunchedEffect(pagerState) {
         snapshotFlow { pagerState.currentPage }
@@ -330,24 +379,15 @@ fun DrinkTabsScreen(
             }
     }
 
-    LaunchedEffect(selectedTabIndex.intValue) {
-        if (selectedTabIndex.intValue != pagerState.currentPage) {
-            pagerState.animateScrollToPage(selectedTabIndex.intValue)
+    LaunchedEffect(pagerState.currentPage, refreshKey.value) {
+        when (pagerState.currentPage) {
+            1 -> drinkViewModel.fetchDrinks("Alcoholic")
+            2 -> drinkViewModel.fetchDrinks("Non_Alcoholic")
         }
     }
 
-    LaunchedEffect(pagerState.currentPage) {
-        val currentPage = pagerState.currentPage
-        if (currentPage > 0) {
-            drinkViewModel.fetchDrinksIfNeeded(
-                when (currentPage) {
-                    1 -> "Alcoholic"
-                    2 -> "Non_Alcoholic"
-                    else -> null
-                }
-            )
-        }
-    }
+    val loadingState = drinkViewModel.loading.collectAsState()
+    //val drinkListState = drinkViewModel.drinkList.collectAsState()
 
     Scaffold(
         topBar = {
@@ -381,6 +421,7 @@ fun DrinkTabsScreen(
                             onClick = {
                                 coroutineScope.launch {
                                     pagerState.animateScrollToPage(index)
+                                    onTabSelected?.invoke(index)
                                 }
                             },
                             text = { Text(text = title) }
@@ -408,22 +449,28 @@ fun DrinkTabsScreen(
                     when (page) {
                         0 -> AppInfoScreen(isTablet)
                         1 -> {
-                            val drinkListState = drinkViewModel.drinkList.collectAsState()
-                            val filteredDrinks = remember(searchText, drinkListState.value) {
-                                drinkListState.value.filter {
-                                    it.strDrink?.contains(searchText, ignoreCase = true) ?: false
+                            if (loadingState.value) {
+                                Box(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    CircularProgressIndicator()
                                 }
+                            } else {
+                                DrinkListContent(drinkViewModel, onDrinkSelected, filteredDrinks)
                             }
-                            DrinkListContent(drinkViewModel, onDrinkSelected, filteredDrinks)
                         }
                         2 -> {
-                            val drinkListState = drinkViewModel.drinkList.collectAsState()
-                            val filteredDrinks = remember(searchText, drinkListState.value) {
-                                drinkListState.value.filter {
-                                    it.strDrink?.contains(searchText, ignoreCase = true) ?: false
+                            if (loadingState.value) {
+                                Box(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    CircularProgressIndicator()
                                 }
+                            } else {
+                                DrinkListContent(drinkViewModel, onDrinkSelected, filteredDrinks)
                             }
-                            DrinkListContent(drinkViewModel, onDrinkSelected,filteredDrinks)
                         }
                     }
                 }
@@ -431,7 +478,6 @@ fun DrinkTabsScreen(
         }
     )
 }
-
 
 @Composable
 fun AppInfoScreen(isTablet: Boolean) {
@@ -512,52 +558,6 @@ fun DrinkListContent(
                 DrinkItem(
                     drink = drink,
                     onClick = { drink.idDrink?.let(onDrinkSelected) }
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun DrinkListScreen(
-    drinkViewModel: DrinkViewModel,
-    onDrinkSelected: (String) -> Unit,
-    filter: String? = null
-) {
-    val drinks by drinkViewModel.drinkList.collectAsState()
-    val loading by drinkViewModel.loading.collectAsState()
-
-    LaunchedEffect(filter) {
-        drinkViewModel.fetchDrinksIfNeeded(filter)
-    }
-
-    if (loading) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator()
-        }
-    } else {
-        val gridState = rememberSaveable(saver = LazyGridStateSaver) {
-            LazyGridState()
-        }
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(2),
-            state = gridState,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(10.dp),
-            contentPadding = PaddingValues(15.dp),
-            verticalArrangement = Arrangement.spacedBy(15.dp),
-            horizontalArrangement = Arrangement.spacedBy(15.dp)
-        ) {
-            items(
-                items = drinks,
-                key = { drink -> drink.idDrink ?: "" }
-            ) { drink ->
-                DrinkItem(
-                    drink = drink,
-                    onClick = {
-                        drink.idDrink?.let { id -> onDrinkSelected(id) }
-                    }
                 )
             }
         }
@@ -772,15 +772,4 @@ fun DrinkDetailScreen(
             }
         }
     }
-}
-
-
-@Preview(showBackground = true)
-@Composable
-fun PreviewPhoneLayout() {
-    val drinkViewModel: DrinkViewModel = viewModel(factory = DrinkViewModelFactory())
-    DrinkListScreen(
-        drinkViewModel = drinkViewModel,
-        onDrinkSelected = {}
-    )
 }

@@ -108,6 +108,7 @@ import kotlinx.coroutines.launch
 import androidx.compose.runtime.derivedStateOf
 import androidx.core.content.ContextCompat
 import androidx.compose.material.icons.filled.Send
+import androidx.compose.material3.FloatingActionButton
 
 val LazyGridStateSaver: Saver<LazyGridState, *> = listSaver(
     save = { listOf(it.firstVisibleItemIndex, it.firstVisibleItemScrollOffset) },
@@ -158,6 +159,7 @@ fun MainApp() {
     val selectedDrinkId = rememberSaveable { mutableStateOf<String?>(null) }
     val selectedTabIndex = rememberSaveable { mutableIntStateOf(0) } // Track selected tab
     val drinkViewModel: DrinkViewModel = viewModel(factory = DrinkViewModelFactory())
+    val phoneNumber = rememberSaveable { mutableStateOf("")}
 
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val coroutineScope = rememberCoroutineScope()
@@ -227,7 +229,10 @@ fun MainApp() {
                 selectedTabIndex = selectedTabIndex,
                 openDrawer = { coroutineScope.launch { drawerState.open() } },
                 refreshKey = refreshKey, // Pass the refresh key
-                updateTabIndex = { index -> selectedTabIndex.intValue = index } // Pass the lambda
+                updateTabIndex = { index -> selectedTabIndex.intValue = index },
+                phoneNumber = phoneNumber.value ,
+                onPhoneConfirmed = {phone -> phoneNumber.value = phone }
+                // Pass the lambda
             )
         } else {
             PhoneLayout(
@@ -236,7 +241,9 @@ fun MainApp() {
                 selectedTabIndex = selectedTabIndex,
                 openDrawer = { coroutineScope.launch { drawerState.open() } },
                 refreshKey = refreshKey, // Pass the refresh key
-                updateTabIndex = { index -> selectedTabIndex.intValue = index } // Pass the lambda
+                updateTabIndex = { index -> selectedTabIndex.intValue = index },
+                phoneNumber = phoneNumber.value, // Pass the lambda
+                onPhoneConfirmed = { phone -> phoneNumber.value = phone }
             )
         }
     }
@@ -250,7 +257,9 @@ fun PhoneLayout(
     selectedTabIndex: MutableIntState,
     openDrawer: () -> Unit,
     refreshKey: MutableState<Int>, // Receive the refresh key
-    updateTabIndex: (Int) -> Unit
+    updateTabIndex: (Int) -> Unit,
+    phoneNumber:String,
+    onPhoneConfirmed: (String) -> Unit
 ) {
     var currentScreen by rememberSaveable { mutableStateOf("tabs") }
     val context = LocalContext.current
@@ -281,7 +290,9 @@ fun PhoneLayout(
                             drinkId = it,
                             onBack = { currentScreen = "tabs" },
                             onSendSms = { ingredients -> sendSms(context, ingredients) },
-                            onMenuClick = openDrawer
+                            onMenuClick = openDrawer,
+                            phoneNumber = phoneNumber,
+                            onPhoneConfirmed = {phone -> onPhoneConfirmed(phone)}
                         )
                     } ?: run {
                         currentScreen = "tabs"
@@ -300,7 +311,9 @@ fun TabletLayout(
     selectedTabIndex: MutableIntState,
     openDrawer: () -> Unit,
     refreshKey: MutableState<Int>, // Receive the refresh key
-    updateTabIndex: (Int) -> Unit
+    updateTabIndex: (Int) -> Unit,
+    phoneNumber:String,
+    onPhoneConfirmed: (String) -> Unit
 ) {
     val context = LocalContext.current
 
@@ -336,7 +349,10 @@ fun TabletLayout(
                             viewModel = drinkViewModel,
                             drinkId = it,
                             onBack = { selectedDrinkId.value = null },
-                            onSendSms = { ingredients -> sendSms(context, ingredients) }
+                            onSendSms = { ingredients -> sendSms(context, ingredients) },
+                            phoneNumber = phoneNumber,
+                            onPhoneConfirmed = {phone -> onPhoneConfirmed(phone)}
+
                         )
                     }
                 }
@@ -625,7 +641,9 @@ fun DrinkDetailScreen(
     drinkId: String,
     onBack: (() -> Unit)? = null,
     onSendSms: ((List<String>) -> Unit)? = null,
-    onMenuClick: (() -> Unit)? = null // Add this parameter
+    onMenuClick: (() -> Unit)? = null ,
+    phoneNumber: String,
+    onPhoneConfirmed: (String) -> Unit
 ) {
     val drinkDetail by viewModel.selectedDrink.collectAsState()
     val loading by viewModel.loading.collectAsState()
@@ -681,35 +699,20 @@ fun DrinkDetailScreen(
 
         },
         floatingActionButton = {
-            if (onSendSms != null && drinkDetail != null) {
-                SmallFloatingActionButton(
+            if (drinkDetail != null && phoneNumber.isNotBlank()) {
+                FloatingActionButton(
                     onClick = {
-                        val ingredients = listOfNotNull(
-                            drinkDetail?.strIngredient1,
-                            drinkDetail?.strIngredient2,
-                            drinkDetail?.strIngredient3,
-                            drinkDetail?.strIngredient4,
-                            drinkDetail?.strIngredient5,
-                            drinkDetail?.strIngredient6,
-                            drinkDetail?.strIngredient7,
-                            drinkDetail?.strIngredient8,
-                            drinkDetail?.strIngredient9,
-                            drinkDetail?.strIngredient10,
-                            drinkDetail?.strIngredient11,
-                            drinkDetail?.strIngredient12,
-                            drinkDetail?.strIngredient13,
-                            drinkDetail?.strIngredient14,
-                            drinkDetail?.strIngredient15,
-                        )
-                        onSendSms(ingredients)
-                    },
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                    contentColor = MaterialTheme.colorScheme.secondary
+                    }
                 ) {
-                    Icon(Icons.AutoMirrored.Filled.Message, "Wyślij SMS ze składnikami")
+                    SmsSenderScreenWithPermissions(
+                        drink = drinkDetail,
+                        phoneNumber = phoneNumber
+                    )
+                    Icon(Icons.Filled.Send, "Wyślij SMS")
+
                 }
             }
-        }
+        },
     ) { padding ->
         Column(
             modifier = Modifier
@@ -780,6 +783,7 @@ fun DrinkDetailScreen(
                             isRunning = isRunning.value,
                             setIsRunning = { isRunning.value = it }
                         )
+                        PhoneNumberInput(phoneNumber = phoneNumber, onPhoneNumberConfirmed = {number -> onPhoneConfirmed(number)})
                     }
                 }
             }

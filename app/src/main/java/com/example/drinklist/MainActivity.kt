@@ -1,12 +1,20 @@
 package com.example.drinklist
 
 import android.annotation.SuppressLint
+import android.telephony.SmsManager
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
+import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -38,6 +46,7 @@ import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.automirrored.filled.Message
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
@@ -87,6 +96,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.example.drinklist.model.DrinkDetail
 import com.example.drinklist.model.DrinkSummary
 import com.example.drinklist.model.SplashScreen
 import com.example.drinklist.ui.theme.DrinkListTheme
@@ -95,6 +105,9 @@ import com.example.drinklist.viewmodel.DrinkViewModelFactory
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
+import androidx.compose.runtime.derivedStateOf
+import androidx.core.content.ContextCompat
+import androidx.compose.material.icons.filled.Send
 
 val LazyGridStateSaver: Saver<LazyGridState, *> = listSaver(
     save = { listOf(it.firstVisibleItemIndex, it.firstVisibleItemScrollOffset) },
@@ -772,4 +785,186 @@ fun DrinkDetailScreen(
             }
         }
     }
+}
+
+
+@Composable
+fun PhoneNumberInput(
+    phoneNumber: String,
+    onPhoneNumberConfirmed: (String) -> Unit,
+    modifier: Modifier = Modifier // Pozwala na modyfikację wyglądu z zewnątrz
+) {
+    var phoneNumber by remember { mutableStateOf(phoneNumber) }
+    var phoneNumberError by remember { mutableStateOf(false) }
+
+    Column(
+        modifier = modifier
+            .padding(16.dp)
+            .fillMaxWidth(), // Wypełnia szerokość dostępnego miejsca
+        verticalArrangement = Arrangement.spacedBy(12.dp) // Odstępy między elementami
+    ) {
+        OutlinedTextField(
+            value = phoneNumber,
+            onValueChange = { newValue ->
+                phoneNumber = newValue.filter { it.isDigit() }
+                phoneNumberError = false
+            },
+            label = { Text("Numer telefonu") },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+            isError = phoneNumberError,
+            supportingText = {
+                if (phoneNumberError) {
+                    Text("Proszę wprowadzić poprawny numer telefonu (min. 9 cyfr).")
+                } else {
+                    Text("Wprowadź swój numer telefonu (np. 123456789)")
+                }
+            },
+            modifier = Modifier.fillMaxWidth()
+        )
+        Button(
+            onClick = {
+                if (phoneNumber.length >= 9) {
+                    onPhoneNumberConfirmed(phoneNumber)
+                } else {
+                    phoneNumberError = true
+                }
+            },
+            enabled = phoneNumber.length >= 9,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Potwierdź numer")
+        }
+    }
+}
+
+
+
+
+fun sendSmsDirectly(context: Context, phoneNumber: String, message: String) {
+
+    if (ContextCompat.checkSelfPermission(context, Manifest.permission.SEND_SMS) != PackageManager.PERMISSION_GRANTED) {
+        Toast.makeText(context, "Brak uprawnienia do wysyłania SMS. Proszę przyznaj uprawnienie w ustawieniach aplikacji.", Toast.LENGTH_LONG).show()
+        return
+    }
+
+    if (phoneNumber.isBlank()) {
+        Toast.makeText(context, "Numer telefonu nie może być pusty.", Toast.LENGTH_SHORT).show()
+        return
+    }
+    if (message.isBlank()) {
+        Toast.makeText(context, "Wiadomość nie może być pusta.", Toast.LENGTH_SHORT).show()
+        return
+    }
+
+    try {
+        val smsManager = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            context.getSystemService(SmsManager::class.java)
+        } else {
+            @Suppress("DEPRECATION") // Suppress lint warning for deprecated getDefault()
+            SmsManager.getDefault()
+        }
+
+        val parts = smsManager.divideMessage(message)
+        smsManager.sendMultipartTextMessage(phoneNumber, null, parts, null, null)
+
+        Toast.makeText(context, "wiadomość: $message", Toast.LENGTH_SHORT).show()
+    } catch (e: Exception) {
+        Toast.makeText(context, "Błąd wysyłania SMS: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+        e.printStackTrace() // Wypisz stos wyjątku do logcat dla debugowania
+    }
+}
+
+
+
+
+@Composable
+fun SmsSenderScreenWithPermissions(drink: DrinkDetail?, phoneNumber: String) {
+    val context = LocalContext.current
+
+    val requestPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted: Boolean ->
+        if (!isGranted) {
+            Toast.makeText(context, "Uprawnienie do wysyłania SMS odrzucone.", Toast.LENGTH_SHORT).show()
+        }
+    }
+    val messageToSend by remember(drink) {
+        derivedStateOf {
+            if (drink == null) {
+                ""
+            } else {
+                val builder = StringBuilder()
+                builder.append("Drink: ${drink.strDrink}\n")
+                builder.append("Składniki:\n")
+                val ingredients = listOfNotNull(
+                    drink.strIngredient1,
+                    drink.strIngredient2,
+                    drink.strIngredient3,
+                    drink.strIngredient4,
+                    drink.strIngredient5,
+                    drink.strIngredient6,
+                    drink.strIngredient7,
+                    drink.strIngredient8,
+                    drink.strIngredient9,
+                    drink.strIngredient10,
+                    drink.strIngredient11,
+                    drink.strIngredient12,
+                    drink.strIngredient13,
+                    drink.strIngredient14,
+                    drink.strIngredient15,
+                ).filter { it.isNotBlank() } // Usuń puste wpisy po formatowaniu
+
+                if (ingredients.isNotEmpty()) {
+                    ingredients.forEach { builder.append("- $it\n") }
+                } else {
+                    builder.append("Brak informacji o składnikach.\n")
+                }
+                builder.toString()
+            }
+        }
+    }
+
+    Column(modifier = Modifier.padding(10.dp)) {
+        // ... (Pola OutlinedTextField dla numeru i wiadomości)
+
+        Button(
+            onClick = {
+                if (messageToSend.isBlank()) {
+                    Toast.makeText(context, "Wpisz numer telefonu i treść wiadomości.", Toast.LENGTH_SHORT).show()
+                    return@Button
+                }
+
+                // Sprawdź, czy uprawnienie SEND_SMS jest już przyznane
+                when {
+                    ContextCompat.checkSelfPermission(
+                        context,
+                        Manifest.permission.SEND_SMS // Upewnij się, że to jest poprawny Manifest.permission
+                    ) == PackageManager.PERMISSION_GRANTED -> {
+                        if(deviceCanSendSms(context)) {
+                            // Uprawnienie już przyznane, wyślij SMS-a bezpośrednio
+                            sendSmsDirectly(context, phoneNumber, messageToSend)
+                        }
+                        else{
+                            Toast.makeText(context, "Twój telefon nie obsługuje wysyłania SMS.", Toast.LENGTH_SHORT).show()
+                        }
+
+                    }
+                    else -> {
+                        requestPermissionLauncher.launch(Manifest.permission.SEND_SMS) // Upewnij się, że to jest poprawny Manifest.permission
+                    }
+                }
+            },
+            // ... (Modyfikatory przycisku)
+        ) {     Icon(
+            imageVector = Icons.Filled.Send, // Zmieniona ikona
+            contentDescription = "Wyślij SMS" // Zaktualizowany opis
+        )
+        }
+    }
+}
+
+
+fun deviceCanSendSms(context: Context): Boolean {
+    val packageManager = context.packageManager
+    return packageManager.hasSystemFeature(PackageManager.FEATURE_TELEPHONY)
 }

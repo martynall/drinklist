@@ -425,7 +425,7 @@ fun DrinkTabsScreen(
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
-                title = { Text("CocktailBase") },
+                title = { Text("DrinkList") },
                 navigationIcon = {
                     if (openDrawer != null) {
                         IconButton(onClick = { openDrawer() }) {
